@@ -148,7 +148,6 @@ void setup(void)
     GlobalStep = 0;
 
     // setup timer1 - 16bit
-    // responsible for timing the rotation of the platter
     TCCR1A = 0;
     TCCR1B = 0;
     // select CTC mode
