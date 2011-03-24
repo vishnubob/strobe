@@ -1,23 +1,27 @@
 // pins
-#define PIN1_PIN            1
-#define PIN2_PIN            2
-#define PIN3_PIN            3
-#define PIN4_PIN            4
-#define PIN5_PIN            5
-#define PIN6_PIN            6
-#define PIN7_PIN            7
-#define PIN8_PIN            8
-#define PIN9_PIN            9
-#define PIN10_PIN           10 
-#define PIN11_PIN           11
-#define PIN12_PIN           12
-#define PIN13_PIN           13
-#define PIN14_PIN           14
-#define PIN15_PIN           15
-#define PIN16_PIN           16
+#define PIN1_PIN            2
+#define PIN2_PIN            3
+#define PIN3_PIN            4
+#define PIN4_PIN            5
+#define PIN5_PIN            6
+#define PIN6_PIN            7
+#define PIN7_PIN            8
+#define PIN8_PIN            9
+#define PIN9_PIN            10
+#define PIN10_PIN           11 
+#define PIN11_PIN           12
+#define PIN12_PIN           13
+#define PIN13_PIN           14
+#define PIN14_PIN           15
+#define PIN15_PIN           16
+#define PIN16_PIN           17
 
-// pin count
-#define PIN_COUNT           16
+// configurable options
+//#define PIN_COUNT           16
+#define PIN_COUNT           4 
+#define SLICE_COUNT         512
+#define STROBE_FREQ         60
+#define CPU_FREQ            16000000
 
 // pin map
 const int _pin_map[] = {PIN1_PIN, PIN2_PIN, PIN3_PIN, PIN4_PIN,
@@ -128,8 +132,9 @@ void test_config(void)
     for(unsigned char idx = 0; idx < PIN_COUNT; ++idx)
     {
         unsigned int on = offset;
-        offset += 64;
-        unsigned int off = (offset == 1024) ? 0 : offset;
+        //offset += (SLICE_COUNT / PIN_COUNT);
+        offset += 1;
+        unsigned int off = (offset >= SLICE_COUNT) ? 0 : offset;
         pins[idx].set_on_off(on, off);
     }
 
@@ -144,6 +149,10 @@ void setup(void)
     // disable global interrupts
     cli();
 
+    // disable the timer0 interrupt
+    // we need the cycles!
+    bitclr(TIMSK0, TOIE0);
+
     // reset global step
     GlobalStep = 0;
 
@@ -154,8 +163,8 @@ void setup(void)
     bitset(TCCR1B, WGM12);
     // 1:1
     bitset(TCCR1B, CS10);
-    // 16000000 / 1024 = 15625.0
-    OCR1A = 15625;
+    // set CTC overflow
+    OCR1A = CPU_FREQ / SLICE_COUNT / STROBE_FREQ;
     // enable compare interrupt
     bitset(TIMSK1, OCIE1A);
 
@@ -182,5 +191,5 @@ void loop(void)
 ISR(TIMER1_COMPA_vect) 
 {
     pins.step(GlobalStep);
-    GlobalStep = (++GlobalStep < 1024) ? GlobalStep : 0;
+    GlobalStep = (++GlobalStep < SLICE_COUNT) ? GlobalStep : 0;
 }
