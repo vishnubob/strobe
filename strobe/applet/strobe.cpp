@@ -1,7 +1,4 @@
-#include <WProgram.h>
-
-extern "C" void __cxa_pure_virtual() { while (1); }
-
+#include "WProgram.h"
 // pins
 #define PIN1_PIN            2
 #define PIN2_PIN            3
@@ -197,3 +194,17 @@ ISR(TIMER1_COMPA_vect)
     pins.step(GlobalStep);
     GlobalStep = (++GlobalStep < SLICE_COUNT) ? GlobalStep : 0;
 }
+#include <WProgram.h>
+
+int main(void)
+{
+	init();
+
+	setup();
+    
+	for (;;)
+		loop();
+        
+	return 0;
+}
+
