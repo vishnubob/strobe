@@ -20,6 +20,12 @@ int auxModeCounter5;
 int auxModeCounter6;
 int auxModeCounter7;
 
+// initialize phases:
+int phase[CHANNEL_COUNT];
+int previousPhase[CHANNEL_COUNT];
+int startPosition[CHANNEL_COUNT];
+int returnDistance[CHANNEL_COUNT];
+
 // note, delta must go evenly!!
 int fadeBetween(int begin, int end, int delta, int timeTillSlow, int slowDownDelay, long tsf, int channel) 
 {
@@ -58,18 +64,12 @@ int fadeBetween(int begin, int end, int delta, int timeTillSlow, int slowDownDel
 }
 
 
-// initialize phases:
-int phase[CHANNEL_COUNT];
-int previousPhase[CHANNEL_COUNT];
-int startPosition[CHANNEL_COUNT];
-int returnDistance[CHANNEL_COUNT];
-
 void setup()
 {
     configure_timers();
 
     // initialize
-    for(int i = 0; i < segments; i++) 
+    for(int i = 0; i < CHANNEL_COUNT; i++) 
     {
         phase[i] = 0;
     }  
@@ -82,7 +82,7 @@ void loop()
     while(timeUntilChange)
     {
         // for each strip
-        for(int i = 0; i < PHASE_COUNTS; ++i) 
+        for(int i = 0; i < PHASE_COUNT; ++i) 
         { 
             // save for printing relative coordinates
             previousPhase[i] = phase[i]; 

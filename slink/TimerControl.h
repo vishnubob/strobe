@@ -2,6 +2,7 @@
 #define __TIMERCONTROL_H__
 
 #include "defines.h"
+#include "RingBuffer.h"
 
 typedef struct pin_timer_channel
 {
