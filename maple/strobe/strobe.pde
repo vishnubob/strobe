@@ -1,8 +1,12 @@
+#include "wirish.h"
+
 #define CHANNEL_COUNT   12
 #define PHASE_COUNT     1024
 #define BASE_FREQUENCY  80
 #define CLOCK_FREQUENCY 72000000
 #define BUFFER_SIZE     0x7F
+
+typedef unsigned int size_t;
 
 // from timers.h and boards.h
 
@@ -144,7 +148,7 @@ public:
 
     uint16 pop_front()
     {
-        *(_rbuf.pop_front());
+        return *(_rbuf.pop_front());
     }
 
     void isr(void) 
@@ -161,15 +165,6 @@ private:
 };
 
 TimerChannel TimerChannels[CHANNEL_COUNT];
-
-void setup()
-{
-    configure_timers();
-    for(int x = 0; x < CHANNEL_COUNT; ++x)
-    {
-        TimerChannels[x].init(ChannelMap + x);
-    }
-}
 
 void configure_timers()
 {
@@ -200,6 +195,15 @@ void configure_timers()
     timer2->CR2 |= 0x6;
 }
 
+void setup()
+{
+    configure_timers();
+    for(int x = 0; x < CHANNEL_COUNT; ++x)
+    {
+        TimerChannels[x].init(ChannelMap + x);
+    }
+}
+
 void loop() 
 {
 }
@@ -216,3 +220,21 @@ void timer4_ch1_interrupt(void) { TimerChannels[8].isr(); }
 void timer4_ch2_interrupt(void) { TimerChannels[9].isr(); }
 void timer4_ch3_interrupt(void) { TimerChannels[10].isr(); }
 void timer4_ch4_interrupt(void) { TimerChannels[11].isr(); }
+
+// Force init to be called *first*, i.e. before static object allocation.
+// Otherwise, statically allocated object that need libmaple may fail.
+__attribute__(( constructor )) void premain() 
+{
+    init();
+}
+
+int main(void) 
+{
+    setup();
+
+    while (1) 
+    {
+        loop();
+    }
+    return 0;
+}
