@@ -6,7 +6,6 @@
 #define BASE_FREQUENCY  80
 #define CLOCK_FREQUENCY 72000000
 #define BUFFER_SIZE     0x7F
-#define BRIGHTNESS      8
 
 typedef unsigned int size_t;
 

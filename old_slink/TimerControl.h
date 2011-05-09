@@ -4,10 +4,6 @@
 #include "defines.h"
 #include "RingBuffer.h"
 
-#define     STATE_OFF   0
-#define     STATE_ON    1
-#define     STATE_SPIN  2
-
 typedef struct pin_timer_channel
 {
     uint8               pin;
@@ -20,23 +16,20 @@ class TimerChannel
 {
 public:
     TimerChannel()
-        : _actual_phase(0), _spin_phase(0), _state(STATE_OFF)
+        : _actual_phase(0)
     {}
 
-    void init(const pin_timer_channel_t *tpin);
-    void push_back(uint16 relative_phase);
+    inline void init(const pin_timer_channel_t *tpin);
+    inline void push_back(uint16 relative_phase);
     inline uint16 pop_front();
-    inline void set_ocm(bool onoff);
     inline void isr(void);
 
 private:
-    uint32                  _actual_phase;
-    uint32                  _spin_phase;
+    uint16                  _actual_phase;
     RingBuffer<uint16>      _rbuf;
     timer_dev_num           _timer;
     uint8                   _channel;
     uint8                   _pin;
-    uint8                   _state;
 };
 
 void configure_timers();

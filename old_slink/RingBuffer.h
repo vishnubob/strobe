@@ -1,16 +1,14 @@
 #ifndef __RING_BUFFER_T__
 #define __RING_BUFFER_T__
 
-#include "defines.h"
-
 template <class T>
 class RingBuffer
 {
 public:
-    RingBuffer()
+    void init(size_t cap)
     {
         _size = 0;
-        _capacity = BUFFER_SIZE;
+        _capacity = cap;
         //_buffer = (T*)malloc(sizeof(T) * _capacity);
         _buffer_end = _buffer + _capacity;
         _head = _buffer;
@@ -19,8 +17,8 @@ public:
 
     bool push_back(const T item)
     {
-        /* spinwait */
-        while (_capacity == _size) {}
+        if (_capacity == _size)
+            return false;
         *_head = item;
         _head += 1;
         if (_head >= _buffer_end)
@@ -42,12 +40,12 @@ public:
     }
 
 private:
-    volatile size_t         _size;
-    size_t                  _capacity;
-    T                       _buffer[BUFFER_SIZE];
-    T                       *_buffer_end;
-    T                       *_head;
-    T                       *_tail;
+    size_t      _size;
+    size_t      _capacity;
+    T           _buffer[BUFFER_SIZE];
+    T           *_buffer_end;
+    T           *_head;
+    T           *_tail;
 };
 
 #endif // __RING_BUFFER_T__
