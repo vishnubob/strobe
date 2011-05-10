@@ -152,33 +152,34 @@ inline void TimerChannel::isr(void)
 // Configure Timers
 void configure_timers()
 {
-    /*
     timer_port *timer2 = timer_dev_table[TIMER2].base;
     timer_port *timer3 = timer_dev_table[TIMER3].base;
     timer_port *timer4 = timer_dev_table[TIMER4].base;
-    */
+
+    /* pause and reset all the timers */
+    Timer2.pause();
+    Timer3.pause();
+    Timer4.pause();
+    Timer2.setCount(0);
+    Timer3.setCount(0);
+    Timer4.setCount(0);
 
     // Timer2
-    Timer2.pause();
     Timer2.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
     Timer2.setOverflow(TIMER_COUNT - 1);
+    timer2->CR2 |= (1 << 4);
 
     // Timer3
-    Timer3.pause();
     Timer3.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
     Timer3.setOverflow(TIMER_COUNT - 1);
-    // Connect timer3 to timer2
-    //timer3->SMCR = 0x20;
+    // Connect timer3 to timer2 (ITR1), trigger mode
+    timer3->SMCR = (1 << 4) | 6;
     
     // Timer4
-    Timer4.pause();
     Timer4.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
     Timer4.setOverflow(TIMER_COUNT - 1);
-    // Connect timer4 to timer2
-    //timer4->SMCR = 0x20;
-
-    // Turn on the timers
-    //timer2->CR2 |= 0x6;
+    // Connect timer4 to timer2 (ITR1), trigger mode
+    timer4->SMCR = (1 << 4) | 6;
 
     // Initialize the Timer Channels
     for(int x = 0; x < CHANNEL_COUNT; ++x)
@@ -186,14 +187,8 @@ void configure_timers()
         TimerChannels[x].init(ChannelMap + x);
     }
 
-    /* XXX: link timers together */
-    Timer2.setCount(0);
-    Timer3.setCount(0);
-    Timer4.setCount(0);
-
+    // Turn on all times at the same time by turning on timer2.
     Timer2.resume();
-    Timer3.resume();
-    Timer4.resume();
 }
 
 /* low level interrupts */
