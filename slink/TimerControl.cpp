@@ -64,13 +64,13 @@ void TimerChannel::init(const pin_timer_channel_t *tpin)
     timer_set_compare_value(_timer, _channel, 10);
 }
 
-void TimerChannel::push_back(uint16 relative_phase)
+void TimerChannel::push_back(uint32 relative_phase)
 {
     //_actual_phase = (relative_phase + _actual_phase) % PHASE_COUNT;
     _rbuf.push_back(relative_phase);
 }
 
-inline uint16 TimerChannel::pop_front()
+inline uint32 TimerChannel::pop_front()
 {
     return *(_rbuf.pop_front());
 }
@@ -128,41 +128,23 @@ inline void TimerChannel::isr(void)
     /* OC?M to 0100000 == set channel to inactive */
     /* OC?M to 0010000 == set channel to active */
 
-    uint32 current_phase;
     uint32 next_phase;
-    uint32 half_way;
 
     switch(_state)
     {
         /* we are currently off */
         case STATE_OFF:
-            current_phase = timer_get_compare_value(_timer, _channel);
-            next_phase = pop_front();
-            if (next_phase >= current_phase)
-            {
-                _state = STATE_SPIN;
-                _spin_phase = next_phase;
-                half_way = (current_phase + PHASE_COUNT - next_phase) / 2 % PHASE_COUNT;
-                timer_set_compare_value(_timer, _channel, half_way);
-                set_ocm(false);
-            } else
-            {
-                _state = STATE_ON;
-                timer_set_compare_value(_timer, _channel, next_phase);
-                set_ocm(true);
-            }
+            _state = STATE_ON;
+            next_phase = (_last_phase + pop_front() + PHASE_COUNT) % TIMER_COUNT;
+            timer_set_compare_value(_timer, _channel, next_phase);
+            set_ocm(true);
+            _last_phase = next_phase;
             break;
         case STATE_ON:
             _state = STATE_OFF;
-            current_phase = timer_get_compare_value(_timer, _channel);
-            next_phase = (current_phase + BRIGHTNESS) % PHASE_COUNT;
+            next_phase = (timer_get_compare_value(_timer, _channel) + BRIGHTNESS) % TIMER_COUNT;
             timer_set_compare_value(_timer, _channel, next_phase);
             set_ocm(false);
-            break;
-        case STATE_SPIN:
-            _state = STATE_ON;
-            timer_set_compare_value(_timer, _channel, _spin_phase);
-            set_ocm(true);
             break;
     }
 } 
@@ -179,19 +161,19 @@ void configure_timers()
     // Timer2
     Timer2.pause();
     Timer2.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
-    Timer2.setOverflow(BASE_FREQUENCY - 1);
+    Timer2.setOverflow(TIMER_COUNT - 1);
 
     // Timer3
     Timer3.pause();
     Timer3.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
-    Timer3.setOverflow(BASE_FREQUENCY - 1);
+    Timer3.setOverflow(TIMER_COUNT - 1);
     // Connect timer3 to timer2
     //timer3->SMCR = 0x20;
     
     // Timer4
     Timer4.pause();
     Timer4.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
-    Timer4.setOverflow(BASE_FREQUENCY - 1);
+    Timer4.setOverflow(TIMER_COUNT - 1);
     // Connect timer4 to timer2
     //timer4->SMCR = 0x20;
 

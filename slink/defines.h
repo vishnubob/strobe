@@ -3,6 +3,7 @@
 
 #define CHANNEL_COUNT   12
 #define PHASE_COUNT     1024
+#define TIMER_COUNT     (PHASE_COUNT * 32)
 #define BASE_FREQUENCY  80
 #define CLOCK_FREQUENCY 72000000
 #define BUFFER_SIZE     0x7F
