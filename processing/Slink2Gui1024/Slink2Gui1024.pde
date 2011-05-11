@@ -4,7 +4,7 @@ int segments = 12;
 // which resonant vibration mode
 int modeNumber = 5; 
 // maximum (based on bit depth)
-float phaseMax = 256.0; 
+float phaseMax = 1024.0; 
 
 // animation variables
 //int currentMode = 0; // what mode are we on?
@@ -12,7 +12,7 @@ float phaseMax = 256.0;
 int currentAnimationStep = 0; 
 // overall counter
 int timeSoFar = 0; 
-// just arbitrarily large anyway, so use time units * 256
+// just arbitrarily large anyway, so use time units * 1024
 int timeUntilChange = 4 * 256; 
  
 // Start time
@@ -206,26 +206,34 @@ int calcNextFrame(ModeState myModeState, int strip)
     switch(myModeState.modeType) 
     {
         case 0:
-            return fadeBetween(40, 0, -1, 50, 20, myModeState.timeSoFar, strip);
+            //return fadeBetween(40, 0, -1, 50, 20, myModeState.timeSoFar, strip);
+            return fadeBetween(40, 0, -4, 50, 80, myModeState.timeSoFar, strip);
         case 1:
-            return fadeBetween(0, 3, 1, 0, 20, myModeState.timeSoFar, strip);
+            //return fadeBetween(0, 3, 1, 0, 20, myModeState.timeSoFar, strip);
+            return fadeBetween(0, 12, 4, 0, 80, myModeState.timeSoFar, strip);
         case 2:
-            return strobeStepping(1, 13, myModeState.timeSoFar, strip);
+            //return strobeStepping(1, 13, myModeState.timeSoFar, strip);
+            return strobeStepping(4, 13, myModeState.timeSoFar, strip);
         case 3:
             // switchBetween(slow, fast, timePerStep, stepDelta, minStep, initialSetupTime, tsf, strip);
             // fast was 216 (=-40)
-            return switchBetween(1, 83, 165, 40, 45, 165, myModeState.timeSoFar, strip); 
+            //return switchBetween(1, 83, 165, 40, 45, 165, myModeState.timeSoFar, strip); 
+            return switchBetween(4, 332, 165, 40, 45, 165, myModeState.timeSoFar, strip); 
         case 4:
             // freezeAndFan(setupTime, deltaDistance, stepDelay, velocityInMiddle, timeInMiddle, tsf, strip) {
             // deltaDistance was 20 originally
-            return freezeAndFan(200, 20, 10, 2, 250, myModeState.timeSoFar, strip); 
+            //return freezeAndFan(200, 20, 10, 2, 250, myModeState.timeSoFar, strip); 
+            return freezeAndFan(200, 80, 10, 8, 250, myModeState.timeSoFar, strip); 
         case 5:
             // note, the velocity (8) * the stepsPerStrip (32) must = the phases steps per period (256)
-            return bumpAndGrind(100, 0, 8, 32, false, myModeState.timeSoFar, strip);
+            //return bumpAndGrind(100, 0, 8, 32, false, myModeState.timeSoFar, strip);
+            return bumpAndGrind(400, 0, 32, 128, false, myModeState.timeSoFar, strip);
         case 6:
-            return bumpAndGrind(0, 0, 8, 32, true, myModeState.timeSoFar, strip);
+            //return bumpAndGrind(0, 0, 8, 32, true, myModeState.timeSoFar, strip);
+            return bumpAndGrind(0, 0, 32, 128, true, myModeState.timeSoFar, strip);
         case 7:
-            return freakOutAndComeTogether(7, myModeState.timeSoFar, strip);
+            //return freakOutAndComeTogether(7, myModeState.timeSoFar, strip);
+            return freakOutAndComeTogether(28, myModeState.timeSoFar, strip);
     }
     return 0;
 }
@@ -332,7 +340,7 @@ int strobeStepping(int velocity, int delayBetweenSteps, long tsf, int strip)
         } else 
         {
             //always store up what we would have moved (whether we move or not)
-            //note, this will wrap around at 256 but that's okay
+            //note, this will wrap around at 1024 but that's okay
             //because the phase does too
             auxModeCounter1 += velocity;
 
@@ -401,7 +409,7 @@ int breakInTwoAndMove(long holdTime, int velocity, long tsf, int strip)
             return 0;
         } else 
         {
-            return 128;
+            return 512;
         }
     } else 
     {
@@ -540,10 +548,10 @@ int bumpAndGrind(int setupTime, int stepTime, int velocity, int stepsPerStrip, b
                     auxModeCounter1 += auxModeCounter5;
                     if(auxModeCounter1 == segments) 
                     {
-                        auxModeCounter5 = 255;
+                        auxModeCounter5 = 1023;
                         // advance twice to no duplicate the one just done
                         auxModeCounter1 += (auxModeCounter5 << 1);
-                    } else if(auxModeCounter1 == 255) 
+                    } else if(auxModeCounter1 == 1023) 
                     {
                         // we're done, so never move anything anymore...
                         velocity = 0;
@@ -553,8 +561,8 @@ int bumpAndGrind(int setupTime, int stepTime, int velocity, int stepsPerStrip, b
 
                 }
             }
-            // the !=255 check is to make sure we don't move once we've gone all the way through
-            if(auxModeCounter3 >= stepTime && auxModeCounter1 != 255) 
+            // the !=1023 check is to make sure we don't move once we've gone all the way through
+            if(auxModeCounter3 >= stepTime && auxModeCounter1 != 1023) 
             {
                 auxModeCounter3 = 0;
                 auxModeCounter2 = velocity;
@@ -596,15 +604,15 @@ int freakOutAndComeTogether(int returnStepsPower, long tsf, int strip)
     if(tsf == 0) 
     {
         // check this, must be even multiple of returnSteps
-        // startPosition[strip]=rand() & 255;	
-        // 0 to 255
-        startPosition[strip] = (int)random(255); 
-        if(startPosition[strip] > 128) 
+        // startPosition[strip]=rand() & 1023;	
+        // 0 to 1023
+        startPosition[strip] = (int)random(1023); 
+        if(startPosition[strip] > 512) 
         {
-            returnDistance[strip] = 256 - startPosition[strip];
+            returnDistance[strip] = 1024 - startPosition[strip];
         } else 
         {
-            returnDistance[strip] = 256 - startPosition[strip];
+            returnDistance[strip] = 1024 - startPosition[strip];
             // weird it's the same, but I think it is
         }
         return startPosition[strip];
