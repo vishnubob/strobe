@@ -5,7 +5,9 @@
 TimerChannel TimerChannels[CHANNEL_COUNT];
 
 // Channel Map
-// from timers.h and boards.h
+// This associates a Pin with a timer, a channel, and a compare interrupt.
+// It is used to initialize the individual TimerChannel objects.
+// Pin mappings are sourced from libmaple/timers.h and libmaple/boards.h
 const pin_timer_channel_t ChannelMap[] = 
 {
     // TIMER2
@@ -28,7 +30,6 @@ const pin_timer_channel_t ChannelMap[] =
 };
 
 // TimerChannel
-
 void TimerChannel::init(const pin_timer_channel_t *tpin)
 {
     _timer = tpin->timer;
@@ -64,17 +65,24 @@ void TimerChannel::init(const pin_timer_channel_t *tpin)
     timer_set_compare_value(_timer, _channel, 0);
 }
 
+// This method is called by the user-code to push 
+// phase information to this channel.
 void TimerChannel::push_back(uint32 relative_phase)
 {
-    //_actual_phase = (relative_phase + _actual_phase) % PHASE_COUNT;
     _rbuf.push_back(relative_phase);
 }
 
+// This method is called by the interrupt service routine
+// to schedule the next phase offset.
 inline uint32 TimerChannel::pop_front()
 {
     return *(_rbuf.pop_front());
 }
 
+// This method manipulates the OC?M bits that dictate how a compare
+// interrupt should affect its bound pin.  By setting onoff to true,
+// a compare interrupt will set the mapped pin to high.  By setting
+// onoff to false, a compare interrupt will set the mapped pin to low.
 inline void TimerChannel::set_ocm(bool onoff)
 {
     timer_port *timer = timer_dev_table[_timer].base;
@@ -123,16 +131,21 @@ inline void TimerChannel::set_ocm(bool onoff)
     }
 }
 
+// The interrupt service routine is called at a compare event.
+// It is a flip-flop state machine that schedules the next timing
+// event, depending on the previous state.  If we are off, we pull
+// the next relative phase from the ring buffer and configure the
+// compare to turn off the mapped pin.  If we are 
 inline void TimerChannel::isr(void) 
 {
-    /* OC?M to 0100000 == set channel to inactive */
-    /* OC?M to 0010000 == set channel to active */
+    // OC?M to 0100000 == set channel to inactive */
+    // OC?M to 0010000 == set channel to active */
 
     uint32 next_phase;
 
     switch(_state)
     {
-        /* we are currently off */
+        // we are currently off
         case STATE_OFF:
             _state = STATE_ON;
             next_phase = (_last_phase + pop_front() + PHASE_COUNT) % TIMER_COUNT;
@@ -161,15 +174,16 @@ void configure_timers()
     // Timer2
     Timer2.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
     Timer2.setOverflow(TIMER_COUNT - 1);
+    // Timer2 is configured as a master
     timer2->CR2 |= (1 << 4);
 
-    // Timer3
+    // Timer3 */
     Timer3.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
     Timer3.setOverflow(TIMER_COUNT - 1);
     // Connect timer3 to timer2 (ITR1), trigger mode
     timer3->SMCR = (1 << 4) | 6;
     
-    // Timer4
+    // Timer4 */
     Timer4.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
     Timer4.setOverflow(TIMER_COUNT - 1);
     // Connect timer4 to timer2 (ITR1), trigger mode
@@ -185,24 +199,26 @@ void configure_timers()
 
 void start_timers()
 {
-    // Turn on all times at the same time by turning on timer2.
+    // Turn on all timers.
+    // Timer3 and Timer4 are linked to Timer2
     Timer2.resume();
-    //Timer3.resume();
-    //Timer4.resume();
 }
 
 void stop_timers()
 {
-    /* pause and reset all the timers */
+    // stop the timers
     Timer2.pause();
     Timer3.pause();
     Timer4.pause();
-    Timer2.setCount(0x1000);
-    Timer3.setCount(0x1000);
-    Timer4.setCount(0x1000);
+
+    // Counters are set to non-zero to force a cycle before
+    // the first compare/interrupt occurs.
+    Timer2.setCount(1);
+    Timer3.setCount(1);
+    Timer4.setCount(1);
 }
 
-/* low level interrupts */
+// Low level interrupt wrappers
 void timer2_ch1_interrupt(void) { TimerChannels[0].isr(); }
 void timer2_ch2_interrupt(void) { TimerChannels[1].isr(); }
 void timer2_ch3_interrupt(void) { TimerChannels[2].isr(); }

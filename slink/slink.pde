@@ -54,10 +54,6 @@ void prime_buffers()
             previous_phase[ch] = phase[ch];
             phase[ch] = calcNextFrame(ch);
             TimerChannels[ch].push_back(phase[ch] - previous_phase[ch]);
-            SerialUSB.print("ch ");
-            SerialUSB.print(ch);
-            SerialUSB.print(" phase ");
-            SerialUSB.println(phase[ch] - previous_phase[ch]);
         }
         timeSoFar++;
         timeUntilChange--;
@@ -73,52 +69,17 @@ void setup()
         digitalWrite(_pin, LOW);
     }
 
-    /*
-    while(1)
-    {
-        if (SerialUSB.available()) 
-        { 
-            SerialUSB.read();
-            break; 
-        }
-    }
-    */
-
     for(int i = 0; i < CHANNEL_COUNT; i++) 
     {
         phase[i] = 0;
     }  
     configure_timers();
 
-    /*
-    SerialUSB.println("Gate1");
-    while(1)
-    {
-        if (SerialUSB.available()) 
-        { 
-            SerialUSB.read();
-            break; 
-        }
-    }
-    */
-
     timeSoFar = 0;
     current_animation = 0;
     timeUntilChange = animation_info[current_animation].duration * PHASE_COUNT;
     prime_buffers();
     start_timers();
-
-    /*
-    SerialUSB.println("Gate2");
-    while(1)
-    {
-        if (SerialUSB.available()) 
-        { 
-            SerialUSB.read();
-            break; 
-        }
-    }
-    */
 }
 
 void loop() 
@@ -132,7 +93,6 @@ void loop()
             previous_phase[ch] = phase[ch];
             phase[ch] = calcNextFrame(ch);
             TimerChannels[ch].push_back(phase[ch] - previous_phase[ch]);
-            //SerialUSB.println(phase[ch]);
         }
 
         timeSoFar++;
@@ -505,22 +465,28 @@ uint32 calcNextFrame(int channel)
             //return fadeBetween(0, 3, 1, 0, 20, timeSoFar, channel);
             return fadeBetween(0, 12, 4, 0, 80, timeSoFar, channel);
         case 2:
-            return strobeStepping(1, 13, timeSoFar, channel);
+            //return strobeStepping(1, 13, timeSoFar, channel);
+            return strobeStepping(4, 52, timeSoFar, channel);
         case 3:
             // switchBetween(slow, fast, timePerStep, stepDelta, minStep, initialSetupTime, tsf, channel);
             // fast was 216 (=-40)
-            return switchBetween(1, 83, 165, 40, 45, 165, timeSoFar, channel); 
+            //return switchBetween(1, 83, 165, 40, 45, 165, timeSoFar, channel); 
+            return switchBetween(4, 332, 660, 160, 180, 660, timeSoFar, channel); 
         case 4:
             // freezeAndFan(setupTime, deltaDistance, stepDelay, velocityInMiddle, timeInMiddle, tsf, channel) {
             // deltaDistance was 20 originally
-            return freezeAndFan(200, 20, 10, 2, 250, timeSoFar, channel); 
+            //return freezeAndFan(200, 20, 10, 2, 250, timeSoFar, channel); 
+            return freezeAndFan(800, 80, 40, 8, 1000, timeSoFar, channel); 
         case 5:
             // note, the velocity (8) * the stepsPerStrip (32) must = the phases steps per period (256)
-            return bumpAndGrind(100, 0, 8, 32, false, timeSoFar, channel);
+            //return bumpAndGrind(100, 0, 8, 32, false, timeSoFar, channel);
+            return bumpAndGrind(400, 0, 32, 128, false, timeSoFar, channel);
         case 6:
-            return bumpAndGrind(0, 0, 8, 32, true, timeSoFar, channel);
+            //return bumpAndGrind(0, 0, 8, 32, true, timeSoFar, channel);
+            return bumpAndGrind(0, 0, 32, 128, true, timeSoFar, channel);
         case 7:
-            return freakOutAndComeTogether(7, timeSoFar, channel);
+            //return freakOutAndComeTogether(7, timeSoFar, channel);
+            return freakOutAndComeTogether(28, timeSoFar, channel);
     }
     return 0;
 }
