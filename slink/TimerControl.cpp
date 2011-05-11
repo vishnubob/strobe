@@ -41,27 +41,27 @@ void TimerChannel::init(const pin_timer_channel_t *tpin)
     {
         case 1:
             timer->CCMR1 &= ~(0x00FF);
-            timer->CCMR1 |= 0x0010;
+            timer->CCMR1 |= 0x0040;
             timer->CCER |= 0x0001;
             break;
         case 2:
             timer->CCMR1 &= ~(0xFF00);
-            timer->CCMR1 |= 0x1000;
+            timer->CCMR1 |= 0x4000;
             timer->CCER |= 0x0010;
             break;
         case 3:
             timer->CCMR2 &= ~(0x00FF);
-            timer->CCMR2 |= 0x0010;
+            timer->CCMR2 |= 0x0040;
             timer->CCER |= 0x0100;
             break;
         case 4:
             timer->CCMR2 &= ~(0xFF00);
-            timer->CCMR2 |= 0x1000;
+            timer->CCMR2 |= 0x4000;
             timer->CCER |= 0x1000;
             break;
     }
     timer_attach_interrupt(_timer, _channel, tpin->isr);
-    timer_set_compare_value(_timer, _channel, 10);
+    timer_set_compare_value(_timer, _channel, 0);
 }
 
 void TimerChannel::push_back(uint32 relative_phase)
@@ -156,13 +156,7 @@ void configure_timers()
     timer_port *timer3 = timer_dev_table[TIMER3].base;
     timer_port *timer4 = timer_dev_table[TIMER4].base;
 
-    /* pause and reset all the timers */
-    Timer2.pause();
-    Timer3.pause();
-    Timer4.pause();
-    Timer2.setCount(0);
-    Timer3.setCount(0);
-    Timer4.setCount(0);
+    stop_timers();
 
     // Timer2
     Timer2.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
@@ -186,9 +180,26 @@ void configure_timers()
     {
         TimerChannels[x].init(ChannelMap + x);
     }
+}
 
+
+void start_timers()
+{
     // Turn on all times at the same time by turning on timer2.
     Timer2.resume();
+    //Timer3.resume();
+    //Timer4.resume();
+}
+
+void stop_timers()
+{
+    /* pause and reset all the timers */
+    Timer2.pause();
+    Timer3.pause();
+    Timer4.pause();
+    Timer2.setCount(0x1000);
+    Timer3.setCount(0x1000);
+    Timer4.setCount(0x1000);
 }
 
 /* low level interrupts */

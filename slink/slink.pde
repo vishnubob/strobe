@@ -44,23 +44,81 @@ int returnDistance[CHANNEL_COUNT];
  ** Setup / Loop
  ******************************************************************************/
 
+void prime_buffers()
+{
+    for(int pc = 0; pc < PRELOAD_COUNT; ++pc)
+    {
+        // for each channel
+        for(int ch = 0; ch < CHANNEL_COUNT; ++ch) 
+        { 
+            previous_phase[ch] = phase[ch];
+            phase[ch] = calcNextFrame(ch);
+            TimerChannels[ch].push_back(phase[ch] - previous_phase[ch]);
+            SerialUSB.print("ch ");
+            SerialUSB.print(ch);
+            SerialUSB.print(" phase ");
+            SerialUSB.println(phase[ch] - previous_phase[ch]);
+        }
+        timeSoFar++;
+        timeUntilChange--;
+    }
+}
+
 void setup()
 {
+    for(int ch = 0; ch < CHANNEL_COUNT; ++ch)
+    {
+        int _pin = ch_to_pin[ch];
+        pinMode(_pin, OUTPUT);
+        digitalWrite(_pin, LOW);
+    }
+
+    /*
     while(1)
     {
-        if (SerialUSB.available()) { break; }
+        if (SerialUSB.available()) 
+        { 
+            SerialUSB.read();
+            break; 
+        }
     }
-    // initialize
+    */
+
     for(int i = 0; i < CHANNEL_COUNT; i++) 
     {
         phase[i] = 0;
     }  
-    SerialUSB.println("Setup");
     configure_timers();
+
+    /*
+    SerialUSB.println("Gate1");
+    while(1)
+    {
+        if (SerialUSB.available()) 
+        { 
+            SerialUSB.read();
+            break; 
+        }
+    }
+    */
 
     timeSoFar = 0;
     current_animation = 0;
     timeUntilChange = animation_info[current_animation].duration * PHASE_COUNT;
+    prime_buffers();
+    start_timers();
+
+    /*
+    SerialUSB.println("Gate2");
+    while(1)
+    {
+        if (SerialUSB.available()) 
+        { 
+            SerialUSB.read();
+            break; 
+        }
+    }
+    */
 }
 
 void loop() 
@@ -411,8 +469,6 @@ uint32 bumpAndGrind(int setupTime, int stepTime, int velocity, int stepsPerStrip
 
 uint32 freakOutAndComeTogether(int returnStepsPower, long tsf, int channel) 
 {
-    int tempPos;
-
     if(tsf == 0) 
     {
         // check this, must be even multiple of returnSteps

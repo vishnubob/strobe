@@ -40,6 +40,8 @@ private:
 };
 
 void configure_timers();
+void start_timers();
+void stop_timers();
 
 // Low level interrupts
 void timer2_ch1_interrupt(void);
