@@ -67,14 +67,14 @@ void TimerChannel::init(const pin_timer_channel_t *tpin)
 
 // This method is called by the user-code to push 
 // phase information to this channel.
-void TimerChannel::push_back(uint32 relative_phase)
+void TimerChannel::push_back(int32 relative_phase)
 {
     _rbuf.push_back(relative_phase);
 }
 
 // This method is called by the interrupt service routine
 // to schedule the next phase offset.
-inline uint32 TimerChannel::pop_front()
+inline int32 TimerChannel::pop_front()
 {
     return *(_rbuf.pop_front());
 }
@@ -141,7 +141,7 @@ inline void TimerChannel::isr(void)
     // OC?M to 0100000 == set channel to inactive */
     // OC?M to 0010000 == set channel to active */
 
-    uint32 next_phase;
+    int32 next_phase;
 
     switch(_state)
     {

@@ -77,7 +77,8 @@ void setup()
 
     timeSoFar = 0;
     current_animation = 0;
-    timeUntilChange = animation_info[current_animation].duration * PHASE_COUNT;
+    //timeUntilChange = animation_info[current_animation].duration * PHASE_COUNT;
+    timeUntilChange = animation_info[current_animation].duration * 256;
     prime_buffers();
     start_timers();
 }
@@ -107,7 +108,8 @@ void loop()
             // XXX: wait for reset button/footswitch/etc
             current_animation = 0; 
         }
-        timeUntilChange = animation_info[current_animation].duration * PHASE_COUNT;
+        //timeUntilChange = animation_info[current_animation].duration * PHASE_COUNT;
+        timeUntilChange = animation_info[current_animation].duration * 256;
         timeSoFar = 0;
         SerialUSB.print("Mode: ");
         SerialUSB.println(current_animation);
@@ -119,7 +121,7 @@ void loop()
  ******************************************************************************/
 
 // note, delta must go evenly!!
-uint32 fadeBetween(int begin, int end, int delta, int timeTillSlow, int slowDownDelay, long tsf, int channel) 
+int32 fadeBetween(int begin, int end, int delta, int timeTillSlow, int slowDownDelay, long tsf, int channel) 
 {
     // only update counters and such during channel 0, otherwise this gets called 12 times...
     if(channel == 0)
@@ -155,7 +157,7 @@ uint32 fadeBetween(int begin, int end, int delta, int timeTillSlow, int slowDown
     }
 }
 
-uint32 strobeStepping(int velocity, int delayBetweenSteps, long tsf, int channel) 
+int32 strobeStepping(int velocity, int delayBetweenSteps, long tsf, int channel) 
 {
     //only update counters and such during channel 0, otherwise this gets called 12 times...
     if(channel == 0) 
@@ -192,7 +194,7 @@ uint32 strobeStepping(int velocity, int delayBetweenSteps, long tsf, int channel
     return phase[channel]+auxModeCounter3;		
 }
 
-uint32 switchBetween(int slow, int fast, int timePerStep, int stepDelta, int minStep, int initialSetupTime, long tsf, int channel)
+int32 switchBetween(int slow, int fast, int timePerStep, int stepDelta, int minStep, int initialSetupTime, long tsf, int channel)
 {
     // only update counters and such during channel 0, otherwise this gets called 12 times...
     if(channel == 0) 
@@ -229,7 +231,7 @@ uint32 switchBetween(int slow, int fast, int timePerStep, int stepDelta, int min
     return phase[channel] + auxModeCounter2;
 }
 
-uint32 breakInTwoAndMove(long holdTime, int velocity, long tsf, int channel) 
+int32 breakInTwoAndMove(long holdTime, int velocity, long tsf, int channel) 
 {
     if(tsf <= holdTime) 
     {
@@ -247,7 +249,7 @@ uint32 breakInTwoAndMove(long holdTime, int velocity, long tsf, int channel)
     }
 }
 
-uint32 freezeAndFan(long setupTime, int deltaDistance, int stepDelay, int velocityInMiddle, int timeInMiddle,  long tsf, int channel) 
+int32 freezeAndFan(long setupTime, int deltaDistance, int stepDelay, int velocityInMiddle, int timeInMiddle,  long tsf, int channel) 
 {
     if(channel == 0) 
     {
@@ -349,7 +351,7 @@ uint32 freezeAndFan(long setupTime, int deltaDistance, int stepDelay, int veloci
     }
 }
 
-uint32 bumpAndGrind(int setupTime, int stepTime, int velocity, int stepsPerStrip, boolean useParity, long tsf, int channel)
+int32 bumpAndGrind(int setupTime, int stepTime, int velocity, int stepsPerStrip, boolean useParity, long tsf, int channel)
 {
     if(channel == 0) 
     {
@@ -427,7 +429,7 @@ uint32 bumpAndGrind(int setupTime, int stepTime, int velocity, int stepsPerStrip
     }
 }
 
-uint32 freakOutAndComeTogether(int returnStepsPower, long tsf, int channel) 
+int32 freakOutAndComeTogether(int returnStepsPower, long tsf, int channel) 
 {
     if(tsf == 0) 
     {
@@ -454,29 +456,29 @@ uint32 freakOutAndComeTogether(int returnStepsPower, long tsf, int channel)
     }
 }
 
-uint32 calcNextFrame(int channel) 
+int32 calcNextFrame(int channel) 
 {
     switch(animation_info[current_animation].mode_number)
     {
         case 0:
             //return fadeBetween(40, 0, -1, 50, 20, timeSoFar, channel);
-            return fadeBetween(160, 0, -4, 50, 80, timeSoFar, channel);
+            return fadeBetween(40, 0, -4, 50, 80, timeSoFar, channel);
         case 1:
             //return fadeBetween(0, 3, 1, 0, 20, timeSoFar, channel);
             return fadeBetween(0, 12, 4, 0, 80, timeSoFar, channel);
         case 2:
             //return strobeStepping(1, 13, timeSoFar, channel);
-            return strobeStepping(4, 52, timeSoFar, channel);
+            return strobeStepping(4, 13, timeSoFar, channel);
         case 3:
             // switchBetween(slow, fast, timePerStep, stepDelta, minStep, initialSetupTime, tsf, channel);
             // fast was 216 (=-40)
             //return switchBetween(1, 83, 165, 40, 45, 165, timeSoFar, channel); 
-            return switchBetween(4, 332, 660, 160, 180, 660, timeSoFar, channel); 
+            return switchBetween(4, 332, 165, 40, 45, 165, timeSoFar, channel); 
         case 4:
             // freezeAndFan(setupTime, deltaDistance, stepDelay, velocityInMiddle, timeInMiddle, tsf, channel) {
             // deltaDistance was 20 originally
             //return freezeAndFan(200, 20, 10, 2, 250, timeSoFar, channel); 
-            return freezeAndFan(800, 80, 40, 8, 1000, timeSoFar, channel); 
+            return freezeAndFan(200, 80, 10, 8, 250, timeSoFar, channel); 
         case 5:
             // note, the velocity (8) * the stepsPerStrip (32) must = the phases steps per period (256)
             //return bumpAndGrind(100, 0, 8, 32, false, timeSoFar, channel);
