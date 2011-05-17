@@ -148,7 +148,7 @@ inline void TimerChannel::isr(void)
         // we are currently off
         case STATE_OFF:
             _state = STATE_ON;
-            next_phase = (_last_phase + pop_front() + PHASE_COUNT) % TIMER_COUNT;
+            next_phase = ((_last_phase + pop_front() + PHASE_COUNT) * PHASE_SCALE_FACTOR) % TIMER_COUNT;
             timer_set_compare_value(_timer, _channel, next_phase);
             set_ocm(true);
             _last_phase = next_phase;

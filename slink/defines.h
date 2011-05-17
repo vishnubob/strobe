@@ -1,15 +1,16 @@
 #ifndef  __DEFINES_H__
 #define  __DEFINES_H__
 
-#define CHANNEL_COUNT   12
-#define PHASE_COUNT     1024
-#define TIMER_COUNT     (PHASE_COUNT * 32)
-#define BASE_FREQUENCY  50
-#define CLOCK_FREQUENCY 72000000
-#define BUFFER_SIZE     0x7F
-#define BRIGHTNESS      3
-#define MODE_COUNT      12
-#define PRELOAD_COUNT   (BUFFER_SIZE - 1)
+#define CHANNEL_COUNT           12
+#define PHASE_COUNT             1024
+#define PHASE_SCALE_FACTOR      4
+#define TIMER_COUNT             (PHASE_COUNT * 32)
+#define BASE_FREQUENCY          50
+#define CLOCK_FREQUENCY         72000000
+#define BUFFER_SIZE             0x7F
+#define BRIGHTNESS              3
+#define MODE_COUNT              12
+#define PRELOAD_COUNT           (BUFFER_SIZE - 1)
 
 typedef unsigned int size_t;
 

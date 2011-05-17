@@ -14,31 +14,31 @@ const animation_info_t animation_info[] =
 extern TimerChannel TimerChannels[CHANNEL_COUNT];
 
 // overall counter
-int timeSoFar = 0; 
+int32 timeSoFar = 0; 
 
 // just arbitrarily large anyway, so use time units * PHASE_COUNT
-int timeUntilChange;
+int32 timeUntilChange;
 
-int current_animation;
-int mode_type;
+int32 current_animation;
+int32 mode_type;
 
 // Start time
 float t = 0.0;  
 
 // these are some mode counters we use for different purposes in each mode
-int auxModeCounter1;
-int auxModeCounter2;
-int auxModeCounter3;
-int auxModeCounter4;
-int auxModeCounter5;
-int auxModeCounter6;
-int auxModeCounter7;
+int32 auxModeCounter1;
+int32 auxModeCounter2;
+int32 auxModeCounter3;
+int32 auxModeCounter4;
+int32 auxModeCounter5;
+int32 auxModeCounter6;
+int32 auxModeCounter7;
 
 // initialize phases:
-uint32 phase[CHANNEL_COUNT];
-uint32 previous_phase[CHANNEL_COUNT];
-int startPosition[CHANNEL_COUNT];
-int returnDistance[CHANNEL_COUNT];
+int32 phase[CHANNEL_COUNT];
+int32 previous_phase[CHANNEL_COUNT];
+int32 startPosition[CHANNEL_COUNT];
+int32 returnDistance[CHANNEL_COUNT];
 
 /*******************************************************************************
  ** Setup / Loop
@@ -46,10 +46,10 @@ int returnDistance[CHANNEL_COUNT];
 
 void prime_buffers()
 {
-    for(int pc = 0; pc < PRELOAD_COUNT; ++pc)
+    for(int32 pc = 0; pc < PRELOAD_COUNT; ++pc)
     {
         // for each channel
-        for(int ch = 0; ch < CHANNEL_COUNT; ++ch) 
+        for(int32 ch = 0; ch < CHANNEL_COUNT; ++ch) 
         { 
             previous_phase[ch] = phase[ch];
             phase[ch] = calcNextFrame(ch);
@@ -62,14 +62,14 @@ void prime_buffers()
 
 void setup()
 {
-    for(int ch = 0; ch < CHANNEL_COUNT; ++ch)
+    for(int32 ch = 0; ch < CHANNEL_COUNT; ++ch)
     {
-        int _pin = ch_to_pin[ch];
+        int32 _pin = ch_to_pin[ch];
         pinMode(_pin, OUTPUT);
         digitalWrite(_pin, LOW);
     }
 
-    for(int i = 0; i < CHANNEL_COUNT; i++) 
+    for(int32 i = 0; i < CHANNEL_COUNT; i++) 
     {
         phase[i] = 0;
     }  
@@ -88,7 +88,7 @@ void loop()
     if (timeUntilChange > 0)
     {
         // for each channel
-        for(int ch = 0; ch < CHANNEL_COUNT; ++ch) 
+        for(int32 ch = 0; ch < CHANNEL_COUNT; ++ch) 
         { 
             // angular position
             previous_phase[ch] = phase[ch];
@@ -116,12 +116,8 @@ void loop()
     }
 }
 
-/*******************************************************************************
- ** Modes
- ******************************************************************************/
-
 // note, delta must go evenly!!
-int32 fadeBetween(int begin, int end, int delta, int timeTillSlow, int slowDownDelay, long tsf, int channel) 
+int32 fadeBetween(int32 begin, int32 end, int32 delta, int32 timeTillSlow, int32 slowDownDelay, int32 tsf, uint8 channel) 
 {
     // only update counters and such during channel 0, otherwise this gets called 12 times...
     if(channel == 0)
@@ -157,7 +153,8 @@ int32 fadeBetween(int begin, int end, int delta, int timeTillSlow, int slowDownD
     }
 }
 
-int32 strobeStepping(int velocity, int delayBetweenSteps, long tsf, int channel) 
+
+int32 strobeStepping(int32 velocity, int32 delayBetweenSteps, int32 tsf, uint8 channel) 
 {
     //only update counters and such during channel 0, otherwise this gets called 12 times...
     if(channel == 0) 
@@ -173,7 +170,6 @@ int32 strobeStepping(int velocity, int delayBetweenSteps, long tsf, int channel)
             //always store up what we would have moved (whether we move or not)
             //note, this will wrap around at 256 but that's okay
             //because the phase does too
-            // XXX: PHASE DOES NOT WRAP AT 256
             auxModeCounter1 += velocity;
 
             //inc the first counter and if it hits our delay then add the velocity we've stored up
@@ -194,7 +190,7 @@ int32 strobeStepping(int velocity, int delayBetweenSteps, long tsf, int channel)
     return phase[channel]+auxModeCounter3;		
 }
 
-int32 switchBetween(int slow, int fast, int timePerStep, int stepDelta, int minStep, int initialSetupTime, long tsf, int channel)
+int32 switchBetween(int32 slow, int32 fast, int32 timePerStep, int32 stepDelta, int32 minStep, int32 initialSetupTime, int32 tsf, uint8 channel)
 {
     // only update counters and such during channel 0, otherwise this gets called 12 times...
     if(channel == 0) 
@@ -231,7 +227,7 @@ int32 switchBetween(int slow, int fast, int timePerStep, int stepDelta, int minS
     return phase[channel] + auxModeCounter2;
 }
 
-int32 breakInTwoAndMove(long holdTime, int velocity, long tsf, int channel) 
+int32 breakInTwoAndMove(int32 holdTime, int32 velocity, int32 tsf, uint8 channel) 
 {
     if(tsf <= holdTime) 
     {
@@ -241,7 +237,7 @@ int32 breakInTwoAndMove(long holdTime, int velocity, long tsf, int channel)
             return 0;
         } else 
         {
-            return (PHASE_COUNT / 2);
+            return 128;
         }
     } else 
     {
@@ -249,7 +245,7 @@ int32 breakInTwoAndMove(long holdTime, int velocity, long tsf, int channel)
     }
 }
 
-int32 freezeAndFan(long setupTime, int deltaDistance, int stepDelay, int velocityInMiddle, int timeInMiddle,  long tsf, int channel) 
+int32 freezeAndFan(int32 setupTime, int32 deltaDistance, int32 stepDelay, int32 velocityInMiddle, int32 timeInMiddle,  int32 tsf, uint8 channel) 
 {
     if(channel == 0) 
     {
@@ -322,7 +318,7 @@ int32 freezeAndFan(long setupTime, int deltaDistance, int stepDelay, int velocit
                     // and tell it to flip the direction
                     if(auxModeCounter6 == 1) 
                     {
-                        auxModeCounter6 = (PHASE_COUNT - 1);
+                        auxModeCounter6 = 255;
                         // it's okay to reset and start again
                         auxModeCounter1 = 0;
                     } else 
@@ -351,7 +347,7 @@ int32 freezeAndFan(long setupTime, int deltaDistance, int stepDelay, int velocit
     }
 }
 
-int32 bumpAndGrind(int setupTime, int stepTime, int velocity, int stepsPerStrip, boolean useParity, long tsf, int channel)
+int32 bumpAndGrind(int32 setupTime, int32 stepTime, int32 velocity, int32 stepsPerStrip, boolean useParity, int32 tsf, uint8 channel)
 {
     if(channel == 0) 
     {
@@ -378,12 +374,12 @@ int32 bumpAndGrind(int setupTime, int stepTime, int velocity, int stepsPerStrip,
                     auxModeCounter4 = 0;
                     // advance the channel we're doing
                     auxModeCounter1 += auxModeCounter5;
-                    if(auxModeCounter1 == CHANNEL_COUNT) 
+                    if(auxModeCounter1 == segments) 
                     {
-                        auxModeCounter5 = (PHASE_COUNT - 1);
+                        auxModeCounter5 = 255;
                         // advance twice to no duplicate the one just done
                         auxModeCounter1 += (auxModeCounter5 << 1);
-                    } else if(auxModeCounter1 == (PHASE_COUNT - 1)) 
+                    } else if(auxModeCounter1 == 255) 
                     {
                         // we're done, so never move anything anymore...
                         velocity = 0;
@@ -393,8 +389,8 @@ int32 bumpAndGrind(int setupTime, int stepTime, int velocity, int stepsPerStrip,
 
                 }
             }
-            // the !=(PHASE_COUNT - 1) check is to make sure we don't move once we've gone all the way through
-            if(auxModeCounter3 >= stepTime && auxModeCounter1 != (PHASE_COUNT - 1)) 
+            // the !=255 check is to make sure we don't move once we've gone all the way through
+            if(auxModeCounter3 >= stepTime && auxModeCounter1 != 255) 
             {
                 auxModeCounter3 = 0;
                 auxModeCounter2 = velocity;
@@ -429,66 +425,65 @@ int32 bumpAndGrind(int setupTime, int stepTime, int velocity, int stepsPerStrip,
     }
 }
 
-int32 freakOutAndComeTogether(int returnStepsPower, long tsf, int channel) 
+int32 freakOutAndComeTogether(int32 returnStepsPower, int32 tsf, uint8 channel) 
 {
+    int32 tempPos;
+
     if(tsf == 0) 
     {
         // check this, must be even multiple of returnSteps
-        // startPosition[channel]=rand() & (PHASE_COUNT - 1);	
-        // 0 to (PHASE_COUNT - 1)
-        startPosition[channel] = (int)random((PHASE_COUNT - 1)); 
-        if(startPosition[channel] > (PHASE_COUNT / 2)) 
+        // startPosition[channel]=rand() & 255;	
+        // 0 to 255
+        startPosition[channel] = (int32)random(255); 
+        if(startPosition[channel] > 128) 
         {
-            returnDistance[channel] = PHASE_COUNT - startPosition[channel];
+            returnDistance[channel] = 256 - startPosition[channel];
         } else 
         {
-            returnDistance[channel] = PHASE_COUNT - startPosition[channel];
+            returnDistance[channel] = 256 - startPosition[channel];
             // weird it's the same, but I think it is
         }
         return startPosition[channel];
     } else if (tsf < (1 << returnStepsPower)) 
     {
-        // return ((long)startPosition[channel]) + ( (returnDistance[channel]*tsf) >> (long)returnStepsPower );
-        return startPosition[channel] + ((int)(returnDistance[channel] * tsf) >> returnStepsPower);
+        // return ((int32)startPosition[channel]) + ( (returnDistance[channel]*tsf) >> (int32)returnStepsPower );
+        return startPosition[channel] + ((int32)(returnDistance[channel] * tsf) >> returnStepsPower);
     } else 
     {
         return phase[channel];
     }
 }
 
-int32 calcNextFrame(int channel) 
+
+/*******************************************************************************
+ ** Modes
+ ******************************************************************************/
+
+int32 calcNextFrame(uint8 channel) 
 {
-    switch(animation_info[current_animation].mode_number)
+    switch(myModeState.modeType) 
     {
         case 0:
-            //return fadeBetween(40, 0, -1, 50, 20, timeSoFar, channel);
-            return fadeBetween(40, 0, -4, 50, 80, timeSoFar, channel);
+            return fadeBetween(40, 0, -1, 50, 20, timeSoFar, channel);
         case 1:
-            //return fadeBetween(0, 3, 1, 0, 20, timeSoFar, channel);
-            return fadeBetween(0, 12, 4, 0, 80, timeSoFar, channel);
+            return fadeBetween(0, 3, 1, 0, 20, timeSoFar, channel);
         case 2:
-            //return strobeStepping(1, 13, timeSoFar, channel);
-            return strobeStepping(4, 13, timeSoFar, channel);
+            return strobeStepping(1, 13, timeSoFar, channel);
         case 3:
             // switchBetween(slow, fast, timePerStep, stepDelta, minStep, initialSetupTime, tsf, channel);
             // fast was 216 (=-40)
-            //return switchBetween(1, 83, 165, 40, 45, 165, timeSoFar, channel); 
-            return switchBetween(4, 332, 165, 40, 45, 165, timeSoFar, channel); 
+            return switchBetween(1, 83, 165, 40, 45, 165, timeSoFar, channel); 
         case 4:
             // freezeAndFan(setupTime, deltaDistance, stepDelay, velocityInMiddle, timeInMiddle, tsf, channel) {
             // deltaDistance was 20 originally
-            //return freezeAndFan(200, 20, 10, 2, 250, timeSoFar, channel); 
-            return freezeAndFan(200, 80, 10, 8, 250, timeSoFar, channel); 
+            return freezeAndFan(200, 20, 10, 2, 250, timeSoFar, channel); 
         case 5:
             // note, the velocity (8) * the stepsPerStrip (32) must = the phases steps per period (256)
-            //return bumpAndGrind(100, 0, 8, 32, false, timeSoFar, channel);
-            return bumpAndGrind(400, 0, 32, 128, false, timeSoFar, channel);
+            return bumpAndGrind(100, 0, 8, 32, false, timeSoFar, channel);
         case 6:
-            //return bumpAndGrind(0, 0, 8, 32, true, timeSoFar, channel);
-            return bumpAndGrind(0, 0, 32, 128, true, timeSoFar, channel);
+            return bumpAndGrind(0, 0, 8, 32, true, timeSoFar, channel);
         case 7:
-            //return freakOutAndComeTogether(7, timeSoFar, channel);
-            return freakOutAndComeTogether(28, timeSoFar, channel);
+            return freakOutAndComeTogether(7, timeSoFar, channel);
     }
     return 0;
 }
