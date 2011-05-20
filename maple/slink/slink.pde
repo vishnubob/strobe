@@ -374,7 +374,7 @@ int32 bumpAndGrind(int32 setupTime, int32 stepTime, int32 velocity, int32 stepsP
                     auxModeCounter4 = 0;
                     // advance the channel we're doing
                     auxModeCounter1 += auxModeCounter5;
-                    if(auxModeCounter1 == segments) 
+                    if(auxModeCounter1 == CHANNEL_COUNT) 
                     {
                         auxModeCounter5 = 255;
                         // advance twice to no duplicate the one just done
@@ -427,8 +427,6 @@ int32 bumpAndGrind(int32 setupTime, int32 stepTime, int32 velocity, int32 stepsP
 
 int32 freakOutAndComeTogether(int32 returnStepsPower, int32 tsf, uint8 channel) 
 {
-    int32 tempPos;
-
     if(tsf == 0) 
     {
         // check this, must be even multiple of returnSteps
@@ -461,7 +459,7 @@ int32 freakOutAndComeTogether(int32 returnStepsPower, int32 tsf, uint8 channel)
 
 int32 calcNextFrame(uint8 channel) 
 {
-    switch(myModeState.modeType) 
+    switch(current_animation)
     {
         case 0:
             return fadeBetween(40, 0, -1, 50, 20, timeSoFar, channel);
