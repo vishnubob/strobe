@@ -17,15 +17,16 @@ public:
         _tail = _head;
     }
 
+    /* XXX FUCK: THIS IS NOT THREAD SAFE XXX */
     bool push_back(const T item)
     {
         /* spinwait */
         while (_capacity == _size) {}
         *_head = item;
+        _size += 1;
         _head += 1;
         if (_head >= _buffer_end)
             _head = _buffer;
-        _size += 1;
         return true;
     }
 
@@ -34,10 +35,10 @@ public:
         if (_size == 0)
             return NULL;
         T* ret = _tail;
+        _size -= 1;
         _tail += 1;
         if(_tail >= _buffer_end)
             _tail = _buffer;
-        _size -= 1;
         return ret;
     }
 

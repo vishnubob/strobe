@@ -20,7 +20,7 @@ class TimerChannel
 {
 public:
     TimerChannel()
-        : _actual_phase(0), _last_phase(0), _state(STATE_OFF)
+        : _last_phase(0), _state(STATE_OFF)
     {}
 
     void init(const pin_timer_channel_t *tpin);
@@ -30,7 +30,6 @@ public:
     inline void isr(void);
 
 private:
-    int32                  _actual_phase;
     int32                  _last_phase;
     RingBuffer<int32>       _rbuf;
     timer_dev_num           _timer;

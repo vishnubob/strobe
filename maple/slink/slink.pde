@@ -62,6 +62,14 @@ void prime_buffers()
 
 void setup()
 {
+    while(1)
+    {
+        if (SerialUSB.available() > 0)
+        {
+            break;
+        }
+    }
+    SerialUSB.println("Running!");
     for(int32 ch = 0; ch < CHANNEL_COUNT; ++ch)
     {
         int32 _pin = ch_to_pin[ch];
@@ -77,10 +85,11 @@ void setup()
 
     timeSoFar = 0;
     current_animation = 0;
-    //timeUntilChange = animation_info[current_animation].duration * PHASE_COUNT;
     timeUntilChange = animation_info[current_animation].duration * 256;
     prime_buffers();
     start_timers();
+    SerialUSB.print("Mode: ");
+    SerialUSB.println(current_animation);
 }
 
 void loop() 

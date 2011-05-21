@@ -138,26 +138,23 @@ inline void TimerChannel::set_ocm(bool onoff)
 // compare to turn off the mapped pin.  If we are 
 inline void TimerChannel::isr(void) 
 {
-    // OC?M to 0100000 == set channel to inactive */
-    // OC?M to 0010000 == set channel to active */
-
     int32 next_phase;
 
     switch(_state)
     {
         // we are currently off
         case STATE_OFF:
-            _state = STATE_ON;
-            next_phase = ((_last_phase + pop_front() + PHASE_COUNT) * PHASE_SCALE_FACTOR) % TIMER_COUNT;
+            next_phase = ((pop_front() * PHASE_SCALE_FACTOR) + _last_phase + PHASE_COUNT) % TIMER_COUNT;
             timer_set_compare_value(_timer, _channel, next_phase);
             set_ocm(true);
+            _state = STATE_ON;
             _last_phase = next_phase;
             break;
         case STATE_ON:
-            _state = STATE_OFF;
-            next_phase = (timer_get_compare_value(_timer, _channel) + BRIGHTNESS) % TIMER_COUNT;
+            next_phase = (_last_phase + BRIGHTNESS) % TIMER_COUNT;
             timer_set_compare_value(_timer, _channel, next_phase);
             set_ocm(false);
+            _state = STATE_OFF;
             break;
     }
 } 
