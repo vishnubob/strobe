@@ -2,7 +2,7 @@
 #define __TIMERCONTROL_H__
 
 #include "defines.h"
-#include "RingBuffer.h"
+#include "Buffer.h"
 
 #define     STATE_OFF   0
 #define     STATE_ON    1
@@ -30,8 +30,8 @@ public:
     inline void isr(void);
 
 private:
-    int32                  _last_phase;
-    RingBuffer<int32>       _rbuf;
+    int32                   _last_phase;
+    DoubleBuffer<int32>     _rbuf;
     timer_dev_num           _timer;
     uint8                   _channel;
     uint8                   _pin;

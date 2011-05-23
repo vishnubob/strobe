@@ -62,6 +62,8 @@ void prime_buffers()
 
 void setup()
 {
+    SerialUSB.end();
+    /*
     while(1)
     {
         if (SerialUSB.available() > 0)
@@ -69,6 +71,7 @@ void setup()
             break;
         }
     }
+    */
     SerialUSB.println("Running!");
     for(int32 ch = 0; ch < CHANNEL_COUNT; ++ch)
     {
@@ -87,23 +90,27 @@ void setup()
     current_animation = 0;
     timeUntilChange = animation_info[current_animation].duration * 256;
     prime_buffers();
+    //SerialUSB.print("Mode: ");
+    //SerialUSB.println(current_animation);
     start_timers();
-    SerialUSB.print("Mode: ");
-    SerialUSB.println(current_animation);
 }
 
 void loop() 
 {
     if (timeUntilChange > 0)
     {
+        //SerialUSB.print(timeUntilChange);
+        //SerialUSB.print(") ");
         // for each channel
         for(int32 ch = 0; ch < CHANNEL_COUNT; ++ch) 
         { 
             // angular position
             previous_phase[ch] = phase[ch];
             phase[ch] = calcNextFrame(ch);
-            TimerChannels[ch].push_back(phase[ch] - previous_phase[ch]);
+            //SerialUSB.print(phase[ch] - previous_phase[ch]);
+            //SerialUSB.print(" ");
         }
+        //SerialUSB.println("");
 
         timeSoFar++;
         timeUntilChange--;
@@ -117,11 +124,14 @@ void loop()
             // XXX: wait for reset button/footswitch/etc
             current_animation = 0; 
         }
-        //timeUntilChange = animation_info[current_animation].duration * PHASE_COUNT;
         timeUntilChange = animation_info[current_animation].duration * 256;
         timeSoFar = 0;
-        SerialUSB.print("Mode: ");
-        SerialUSB.println(current_animation);
+        //SerialUSB.print("Mode: ");
+        //SerialUSB.println(current_animation);
+    }
+    for(int32 ch = 0; ch < CHANNEL_COUNT; ++ch) 
+    { 
+        TimerChannels[ch].push_back(phase[ch] - previous_phase[ch]);
     }
 }
 
@@ -413,7 +423,7 @@ int32 bumpAndGrind(int32 setupTime, int32 stepTime, int32 velocity, int32 stepsP
     if(useParity) 
     {
         // this line is screwed up from translation from c?
-        // if(tsf <= setupTime || (channel > auxModeCounter1 || ((channel ^ auxModeCounter1) & 1) == 1 )) 
+        //if(tsf <= setupTime || (channel > auxModeCounter1 || ((channel ^ auxModeCounter1) & 1) == 1 )) 
         if(tsf <= setupTime || (channel > auxModeCounter1 || ((channel % 2) == (auxModeCounter1 % 2)))) 
         {
             return phase[channel];
@@ -441,7 +451,7 @@ int32 freakOutAndComeTogether(int32 returnStepsPower, int32 tsf, uint8 channel)
         // check this, must be even multiple of returnSteps
         // startPosition[channel]=rand() & 255;	
         // 0 to 255
-        startPosition[channel] = (int32)random(255); 
+        startPosition[channel] = (int32)random(256); 
         if(startPosition[channel] > 128) 
         {
             returnDistance[channel] = 256 - startPosition[channel];
@@ -453,7 +463,7 @@ int32 freakOutAndComeTogether(int32 returnStepsPower, int32 tsf, uint8 channel)
         return startPosition[channel];
     } else if (tsf < (1 << returnStepsPower)) 
     {
-        // return ((int32)startPosition[channel]) + ( (returnDistance[channel]*tsf) >> (int32)returnStepsPower );
+        //return ((int32)startPosition[channel]) + ( (returnDistance[channel]*tsf) >> (int32)returnStepsPower );
         return startPosition[channel] + ((int32)(returnDistance[channel] * tsf) >> returnStepsPower);
     } else 
     {
