@@ -46,22 +46,22 @@ void TimerChannel::init(const pin_timer_channel_t *tpin)
     {
         case 1:
             timer->CCMR1 &= ~(0x00FF);
-            timer->CCMR1 |= 0x0030;
+            timer->CCMR1 |= 0x0040;
             timer->CCER |= 0x0001;
             break;
         case 2:
             timer->CCMR1 &= ~(0xFF00);
-            timer->CCMR1 |= 0x3000;
+            timer->CCMR1 |= 0x4000;
             timer->CCER |= 0x0010;
             break;
         case 3:
             timer->CCMR2 &= ~(0x00FF);
-            timer->CCMR2 |= 0x0030;
+            timer->CCMR2 |= 0x0040;
             timer->CCER |= 0x0100;
             break;
         case 4:
             timer->CCMR2 &= ~(0xFF00);
-            timer->CCMR2 |= 0x3000;
+            timer->CCMR2 |= 0x4000;
             timer->CCER |= 0x1000;
             break;
     }
@@ -157,14 +157,14 @@ inline void TimerChannel::isr(void)
     {
         // we are currently off
         case STATE_OFF:
-            //set_ocm(true);
+            set_ocm(true);
             next_phase = ((pop_front() * PHASE_SCALE_FACTOR) + _last_phase + PHASE_COUNT) % TIMER_COUNT;
             timer_set_compare_value(_timer, _channel, next_phase);
             _state = STATE_ON;
             _last_phase = next_phase;
             break;
         case STATE_ON:
-            //set_ocm(false);
+            set_ocm(false);
             next_phase = (_last_phase + BRIGHTNESS) % TIMER_COUNT;
             timer_set_compare_value(_timer, _channel, next_phase);
             _state = STATE_OFF;
