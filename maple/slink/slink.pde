@@ -20,7 +20,7 @@ int32 timeSoFar = 0;
 int32 timeUntilChange;
 
 int32 current_animation;
-int32 mode_type;
+int32 current_mode;
 
 // Start time
 float t = 0.0;  
@@ -60,62 +60,82 @@ void prime_buffers()
     }
 }
 
-void setup()
+void reset_runtime()
 {
-    SerialUSB.end();
-    /*
-    while(1)
-    {
-        if (SerialUSB.available() > 0)
-        {
-            break;
-        }
-    }
-    */
-    SerialUSB.println("Running!");
-    for(int32 ch = 0; ch < CHANNEL_COUNT; ++ch)
-    {
-        int32 _pin = ch_to_pin[ch];
-        pinMode(_pin, OUTPUT);
-        digitalWrite(_pin, LOW);
-    }
-
-    for(int32 i = 0; i < CHANNEL_COUNT; i++) 
-    {
-        phase[i] = 0;
-    }  
+    /* configure timers */
     configure_timers();
 
+    /* Turn off the PINs (safety) */
+    for(int32 ch = 0; ch < CHANNEL_COUNT; ++ch)
+    {
+        phase[ch] = 0;
+        previous_phase[ch] = 0;
+    }  
+
+    /* initialize runtime variables */
     timeSoFar = 0;
     current_animation = 0;
     timeUntilChange = animation_info[current_animation].duration * 256;
+    current_mode = animation_info[current_animation].mode_number;
+
+#ifndef SERIAL_DEBUG
+    /* prime the ring buffers */
     prime_buffers();
-    //SerialUSB.print("Mode: ");
-    //SerialUSB.println(current_animation);
     start_timers();
+#endif
+}
+
+void setup()
+{
+#ifndef SERIAL_DEBUG
+    /* Turn off USB */
+    SerialUSB.end();
+#endif
+    /* random seed */
+    pinMode(RANDOM_PIN, INPUT_ANALOG);
+    randomSeed(analogRead(0));
+
+    /* Debug LED */
+    pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, HIGH);
+
+    /* reset runtime */
+    reset_runtime();
 }
 
 void loop() 
 {
     if (timeUntilChange > 0)
     {
-        //SerialUSB.print(timeUntilChange);
-        //SerialUSB.print(") ");
         // for each channel
-        for(int32 ch = 0; ch < CHANNEL_COUNT; ++ch) 
+        for(int ch = 0; ch < CHANNEL_COUNT; ++ch) 
         { 
             // angular position
             previous_phase[ch] = phase[ch];
             phase[ch] = calcNextFrame(ch);
-            //SerialUSB.print(phase[ch] - previous_phase[ch]);
-            //SerialUSB.print(" ");
+            SerialUSB.print(phase[ch] - previous_phase[ch]);
+            SerialUSB.print(" ");
+#ifndef SERIAL_DEBUG
+            TimerChannels[ch].push_back(phase[ch] - previous_phase[ch]);
+#endif
         }
-        //SerialUSB.println("");
+
+#ifdef SERIAL_DEBUG
+        SerialUSB.print(timeUntilChange);
+        SerialUSB.print(") ");
+        for(int ch = 0; ch < CHANNEL_COUNT; ++ch) 
+        { 
+            SerialUSB.print(phase[ch] - previous_phase[ch]);
+            SerialUSB.print(" ");
+        }
+        SerialUSB.print(" ");
+#endif
 
         timeSoFar++;
         timeUntilChange--;
     } else
     {
+        //digitalWrite(LED_PIN, !digitalRead(LED_PIN));
         // advance animation step
         current_animation++;
         if(current_animation >= MODE_COUNT) 
@@ -125,13 +145,27 @@ void loop()
             current_animation = 0; 
         }
         timeUntilChange = animation_info[current_animation].duration * 256;
+        current_mode = animation_info[current_animation].mode_number;
         timeSoFar = 0;
-        //SerialUSB.print("Mode: ");
-        //SerialUSB.println(current_animation);
-    }
-    for(int32 ch = 0; ch < CHANNEL_COUNT; ++ch) 
-    { 
-        TimerChannels[ch].push_back(phase[ch] - previous_phase[ch]);
+#ifdef SERIAL_DEBUG
+        SerialUSB.print("Mode: ");
+        SerialUSB.println(current_mode);
+#else
+        /* flush the ring buffers */
+        bool all_channels_empty = false;
+        while(!all_channels_empty)
+        {
+            all_channels_empty = true;
+            for(int ch = 0; ch < CHANNEL_COUNT; ++ch) 
+            { 
+                all_channels_empty &= TimerChannels[ch].is_empty();
+            }
+        }
+#endif
+        if (current_animation == 0)
+        {
+            reset_runtime();
+        }
     }
 }
 
@@ -433,7 +467,6 @@ int32 bumpAndGrind(int32 setupTime, int32 stepTime, int32 velocity, int32 stepsP
         }
     } else 
     {
-        // if(tsf <= setupTime || auxModeCounter1 != channel)
         if((tsf <= setupTime) || (auxModeCounter1 != channel)) 
         {
             return phase[channel];
@@ -452,19 +485,12 @@ int32 freakOutAndComeTogether(int32 returnStepsPower, int32 tsf, uint8 channel)
         // startPosition[channel]=rand() & 255;	
         // 0 to 255
         startPosition[channel] = (int32)random(256); 
-        if(startPosition[channel] > 128) 
-        {
-            returnDistance[channel] = 256 - startPosition[channel];
-        } else 
-        {
-            returnDistance[channel] = 256 - startPosition[channel];
-            // weird it's the same, but I think it is
-        }
-        return startPosition[channel];
+        returnDistance[channel] = 256 - startPosition[channel];
+        return phase[channel] + startPosition[channel];
     } else if (tsf < (1 << returnStepsPower)) 
     {
         //return ((int32)startPosition[channel]) + ( (returnDistance[channel]*tsf) >> (int32)returnStepsPower );
-        return startPosition[channel] + ((int32)(returnDistance[channel] * tsf) >> returnStepsPower);
+        return phase[channel] + startPosition[channel] + ((int32)(returnDistance[channel] * tsf) >> returnStepsPower);
     } else 
     {
         return phase[channel];
@@ -478,7 +504,7 @@ int32 freakOutAndComeTogether(int32 returnStepsPower, int32 tsf, uint8 channel)
 
 int32 calcNextFrame(uint8 channel) 
 {
-    switch(current_animation)
+    switch(current_mode)
     {
         case 0:
             return fadeBetween(40, 0, -1, 50, 20, timeSoFar, channel);

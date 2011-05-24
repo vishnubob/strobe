@@ -25,6 +25,7 @@ int32 timeSoFar = 0;
 int32 timeUntilChange;
 
 int32 current_animation;
+int32 current_mode;
 int32 mode_type;
 
 // Start time
@@ -75,6 +76,7 @@ void setup()
     timeSoFar = 0;
     current_animation = 0;
     timeUntilChange = animation_info[current_animation].duration * 256;
+    current_mode = animation_info[current_animation].mode_number;
     //prime_buffers();
     printf("Mode: %d\n", current_animation);
 }
@@ -107,6 +109,7 @@ void loop()
         }
         //timeUntilChange = animation_info[current_animation].duration * PHASE_COUNT;
         timeUntilChange = animation_info[current_animation].duration * 256;
+        current_mode = animation_info[current_animation].mode_number;
         timeSoFar = 0;
         printf("Mode: %d\n", current_animation);
     }
@@ -433,8 +436,8 @@ int32 freakOutAndComeTogether(int32 returnStepsPower, int32 tsf, uint8 channel)
         // check this, must be even multiple of returnSteps
         // startPosition[channel]=rand() & 255;	
         // 0 to 255
-        //startPosition[channel] = (int32)(rand() % 255); 
-        startPosition[channel] = 10;
+        startPosition[channel] = (int32)(rand() % 255); 
+        //startPosition[channel] = 10;
         if(startPosition[channel] > 128) 
         {
             returnDistance[channel] = 256 - startPosition[channel];
@@ -443,11 +446,11 @@ int32 freakOutAndComeTogether(int32 returnStepsPower, int32 tsf, uint8 channel)
             returnDistance[channel] = 256 - startPosition[channel];
             // weird it's the same, but I think it is
         }
-        return startPosition[channel];
+        return phase[channel] + startPosition[channel];
     } else if (tsf < (1 << returnStepsPower)) 
     {
         // return ((int32)startPosition[channel]) + ( (returnDistance[channel]*tsf) >> (int32)returnStepsPower );
-        return startPosition[channel] + ((int32)(returnDistance[channel] * tsf) >> returnStepsPower);
+        return phase[channel] + startPosition[channel] + ((int32)(returnDistance[channel] * tsf) >> returnStepsPower);
     } else 
     {
         return phase[channel];
@@ -461,7 +464,7 @@ int32 freakOutAndComeTogether(int32 returnStepsPower, int32 tsf, uint8 channel)
 
 int32 calcNextFrame(uint8 channel) 
 {
-    switch(current_animation)
+    switch(current_mode)
     {
         case 0:
             return fadeBetween(40, 0, -1, 50, 20, timeSoFar, channel);

@@ -32,9 +32,13 @@ const pin_timer_channel_t ChannelMap[] =
 // TimerChannel
 void TimerChannel::init(const pin_timer_channel_t *tpin)
 {
+    digitalWrite(tpin->pin, LOW);
+
     _timer = tpin->timer;
     _channel = tpin->channel;
     _pin = tpin->pin;
+    _last_phase = 0;
+    _state = STATE_OFF;
 
     pinMode(_pin, PWM);
     timer_port *timer = timer_dev_table[_timer].base;
@@ -65,18 +69,27 @@ void TimerChannel::init(const pin_timer_channel_t *tpin)
     timer_set_compare_value(_timer, _channel, 0);
 }
 
+bool TimerChannel::is_empty()
+{
+    return _rbuf.is_empty();
+}
+
+
 // This method is called by the user-code to push 
 // phase information to this channel.
-void TimerChannel::push_back(int32 relative_phase)
+void TimerChannel::push_back(int16 relative_phase)
 {
     _rbuf.push_back(relative_phase);
 }
 
 // This method is called by the interrupt service routine
 // to schedule the next phase offset.
-inline int32 TimerChannel::pop_front()
+inline int16 TimerChannel::pop_front()
 {
-    return *(_rbuf.pop_front());
+    int16 *phase = _rbuf.pop_front();
+    if(phase == NULL)
+        digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+    return (phase ? *phase : 0);
 }
 
 // This method manipulates the OC?M bits that dictate how a compare
@@ -193,7 +206,6 @@ void configure_timers()
     }
 }
 
-
 void start_timers()
 {
     // Turn on all timers.
@@ -210,9 +222,9 @@ void stop_timers()
 
     // Counters are set to non-zero to force a cycle before
     // the first compare/interrupt occurs.
-    Timer2.setCount(1);
-    Timer3.setCount(1);
-    Timer4.setCount(1);
+    Timer2.setCount(0);
+    Timer3.setCount(0);
+    Timer4.setCount(0);
 }
 
 // Low level interrupt wrappers

@@ -2,7 +2,7 @@
 #define __TIMERCONTROL_H__
 
 #include "defines.h"
-#include "Buffer.h"
+#include "RingBuffer.h"
 
 #define     STATE_OFF   0
 #define     STATE_ON    1
@@ -19,19 +19,16 @@ typedef struct pin_timer_channel
 class TimerChannel
 {
 public:
-    TimerChannel()
-        : _last_phase(0), _state(STATE_OFF)
-    {}
-
     void init(const pin_timer_channel_t *tpin);
-    void push_back(int32 relative_phase);
-    inline int32 pop_front();
+    void push_back(int16 relative_phase);
+    inline int16 pop_front();
+    bool is_empty();
     inline void set_ocm(bool onoff);
     inline void isr(void);
 
 private:
     int32                   _last_phase;
-    DoubleBuffer<int32>     _rbuf;
+    RingBuffer<int16>       _rbuf;
     timer_dev_num           _timer;
     uint8                   _channel;
     uint8                   _pin;
