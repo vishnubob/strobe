@@ -5,7 +5,7 @@
 #define PHASE_COUNT             1024
 #define PHASE_SCALE_FACTOR      4
 #define TIMER_COUNT             (PHASE_COUNT * 32)
-#define BASE_FREQUENCY          45
+#define BASE_FREQUENCY          56
 #define CLOCK_FREQUENCY         72000000
 #define BRIGHTNESS              5
 #define MODE_COUNT              12 

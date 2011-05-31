@@ -42,6 +42,7 @@ int32 auxModeCounter7;
 
 // initialize phases:
 int32 phase[CHANNEL_COUNT];
+int32 last_phase[CHANNEL_COUNT];
 int32 previous_phase[CHANNEL_COUNT];
 int32 startPosition[CHANNEL_COUNT];
 int32 returnDistance[CHANNEL_COUNT];
@@ -71,6 +72,7 @@ void setup()
     for(int32 i = 0; i < CHANNEL_COUNT; i++) 
     {
         phase[i] = 0;
+        last_phase[i] = 0;
     }  
 
     timeSoFar = 0;
@@ -115,7 +117,14 @@ void loop()
     }
     for(int32 ch = 0; ch < CHANNEL_COUNT; ++ch) 
     { 
-        printf("%d ", phase[ch] - previous_phase[ch]);
+        /* ring buffer push */
+        int next_phase = phase[ch] - previous_phase[ch];
+
+        /* ring buffer pop */
+        next_phase = ((next_phase - 128 + 512) % 256) + 128;
+        next_phase = ((next_phase * 4) + last_phase[ch]) % (32 * 1024);
+        printf("%d ", next_phase);
+        last_phase[ch] = next_phase;
     }
     printf("\n");
 }
