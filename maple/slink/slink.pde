@@ -44,27 +44,30 @@ int32 returnDistance[CHANNEL_COUNT];
  ** Setup / Loop
  ******************************************************************************/
 
-void prime_buffers()
+void ramp_motor_up()
 {
-    for(int32 pc = 0; pc < PRELOAD_COUNT; ++pc)
+    analogWrite(MOTOR_PWM_PIN, 0);
+    digitalWrite(MOTOR_EN_PIN, HIGH);
+    for(int speed = 0; speed <= MOTOR_MAX_SPEED; speed += 1)
     {
-        // for each channel
-        for(int32 ch = 0; ch < CHANNEL_COUNT; ++ch) 
-        { 
-            previous_phase[ch] = phase[ch];
-            phase[ch] = calcNextFrame(ch);
-            TimerChannels[ch].push_back(phase[ch] - previous_phase[ch]);
-        }
-        timeSoFar++;
-        timeUntilChange--;
-    }
+        analogWrite(MOTOR_PWM_PIN, speed);         
+        delayMicroseconds(800);                            
+    } 
 }
 
-void reset_runtime()
+void ramp_motor_down()
 {
-    /* configure timers */
-    configure_timers();
+    for(int speed = MOTOR_MAX_SPEED; speed >= 0; speed -= 1)
+    {
+        analogWrite(MOTOR_PWM_PIN, speed);         
+        delayMicroseconds(800);                            
+    } 
+    analogWrite(MOTOR_PWM_PIN, 0);
+    digitalWrite(MOTOR_EN_PIN, LOW);
+}
 
+void reset_slink()
+{
     /* Turn off the PINs (safety) */
     for(int32 ch = 0; ch < CHANNEL_COUNT; ++ch)
     {
@@ -77,33 +80,9 @@ void reset_runtime()
     current_animation = 0;
     timeUntilChange = animation_info[current_animation].duration * 256;
     current_mode = animation_info[current_animation].mode_number;
-
-#ifndef SERIAL_DEBUG
-    /* prime the ring buffers */
-    prime_buffers();
-    start_timers();
-#endif
 }
 
-void setup()
-{
-#ifndef SERIAL_DEBUG
-    /* Turn off USB */
-    SerialUSB.end();
-#endif
-    /* random seed */
-    pinMode(RANDOM_PIN, INPUT_ANALOG);
-    randomSeed(analogRead(0));
-
-    /* Debug LED */
-    pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, HIGH);
-
-    /* reset runtime */
-    reset_runtime();
-}
-
-void loop() 
+bool slink_loop() 
 {
     if (timeUntilChange > 0)
     {
@@ -135,14 +114,12 @@ void loop()
         timeUntilChange--;
     } else
     {
-        //digitalWrite(LED_PIN, !digitalRead(LED_PIN));
         // advance animation step
         current_animation++;
         if(current_animation >= MODE_COUNT) 
         {
-            // XXX: turn motor off, etc.. 
-            // XXX: wait for reset button/footswitch/etc
-            current_animation = 0; 
+            slink_flush();
+            return false;
         }
         timeUntilChange = animation_info[current_animation].duration * 256;
         current_mode = animation_info[current_animation].mode_number;
@@ -151,21 +128,77 @@ void loop()
         SerialUSB.print("Mode: ");
         SerialUSB.println(current_mode);
 #else
-        /* flush the ring buffers */
-        bool all_channels_empty = false;
-        while(!all_channels_empty)
-        {
-            all_channels_empty = true;
-            for(int ch = 0; ch < CHANNEL_COUNT; ++ch) 
-            { 
-                all_channels_empty &= TimerChannels[ch].is_empty();
-            }
-        }
+        slink_flush();
 #endif
-        if (current_animation == 0)
+    }
+    return true;
+}
+
+void setup()
+{
+#ifndef SERIAL_DEBUG
+    /* Turn off USB */
+    SerialUSB.end();
+#endif
+    /* random seed */
+    pinMode(RANDOM_PIN, INPUT_ANALOG);
+    randomSeed(analogRead(0));
+
+    /* Debug LED */
+    pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, HIGH);
+
+    /* misc pins */
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
+    pinMode(MOTOR_PWM_PIN, PWM);
+    analogWrite(MOTOR_PWM_PIN, 0);
+    pinMode(MOTOR_EN_PIN, OUTPUT);
+    digitalWrite(MOTOR_EN_PIN, LOW);
+
+    /* configure timers */
+    configure_timers();
+    start_timers();
+}
+
+void loop()
+{
+    delay(100);
+    /* wait for button press */
+    int debounce = 0;
+    while(debounce < 5)
+    {
+        if (digitalRead(BUTTON_PIN) == LOW)
         {
-            reset_runtime();
+            debounce++;
+            delay(20);
         }
+        else
+        {
+            debounce = 0;
+        }
+    }
+        
+    digitalWrite(LED_PIN, LOW);
+    ramp_motor_up();
+    delay(500);
+    reset_slink();
+    bool running = true;
+    while(running)
+    {
+        running = slink_loop();
+    }
+    ramp_motor_down();
+}
+
+void slink_flush()
+{
+    /* flush the ring buffers */
+    bool all_channels_empty = false;
+    while(!all_channels_empty)
+    {
+        all_channels_empty = true;
+        for(int ch = 0; ch < CHANNEL_COUNT; ++ch) 
+            all_channels_empty &= TimerChannels[ch].is_empty();
     }
 }
 
@@ -515,7 +548,7 @@ int32 calcNextFrame(uint8 channel)
         case 3:
             // switchBetween(slow, fast, timePerStep, stepDelta, minStep, initialSetupTime, tsf, channel);
             // fast was 216 (=-40)
-            return switchBetween(1, 83, 165, 40, 45, 165, timeSoFar, channel); 
+            return switchBetween(1, 41, 165, 40, 45, 165, timeSoFar, channel); 
         case 4:
             // freezeAndFan(setupTime, deltaDistance, stepDelay, velocityInMiddle, timeInMiddle, tsf, channel) {
             // deltaDistance was 20 originally
