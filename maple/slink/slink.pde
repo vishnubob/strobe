@@ -51,6 +51,21 @@ int32 returnDistance[CHANNEL_COUNT];
  ** Setup / Loop
  ******************************************************************************/
 
+bool debounce(int pin, int level)
+{
+    int debounce = 0;
+    int dcount = 0;
+    for( ; dcount <= 5; dcount++)
+    {
+        if (digitalRead(pin) == level)
+        {
+            debounce++;
+            delay(20);
+        }
+    }
+    return (debounce == dcount);
+}
+
 void ramp_motor_up()
 {
     analogWrite(MOTOR_PWM_PIN, 0);
@@ -101,9 +116,10 @@ bool slink_loop()
             // angular position
             previous_phase[ch] = phase[ch];
             phase[ch] = calcNextFrame(ch);
-            //SerialUSB.print(phase[ch] - previous_phase[ch]);
-            //SerialUSB.print(" ");
-#ifndef SERIAL_DEBUG
+#ifdef SERIAL_DEBUG
+            SerialUSB.print(phase[ch] - previous_phase[ch]);
+            SerialUSB.print(" ");
+#else
             TimerChannels[ch].push_back(phase[ch] - previous_phase[ch]);
 #endif
         }
@@ -150,7 +166,7 @@ int avgAnalogRead(int pin, int samples = 50)
     {
         sum += analogRead(pin);
     }
-    return (int)(sum / samples);
+    return (sum / samples);
 }
 
 void eeprom_save()
@@ -167,8 +183,8 @@ void eeprom_save()
 
 void eeprom_load()
 {
-    BRIGHTNESS = EEPROM.read(ADDRESS_BRIGHTNESS);
-    PRESCALE = EEPROM.read(ADDRESS_PRESCALE);
+    BRIGHTNESS = max(BRIGHTNESS_MIN, min(BRIGHTNESS_MAX, EEPROM.read(ADDRESS_BRIGHTNESS)));
+    PRESCALE = max(PRESCALE_MIN, min(PRESCALE_MAX, EEPROM.read(ADDRESS_PRESCALE)));
 #ifdef SERIAL_DEBUG
     SerialUSB.print("Loaded B=");
     SerialUSB.print(BRIGHTNESS);
@@ -179,28 +195,15 @@ void eeprom_load()
 
 void maintenance_mode()
 {
-    int debounce = 0;
-    int dcount = 0;
-    for( ; dcount <= 5; dcount++)
-    {
-        if (digitalRead(BUTTON_MAINTENANCE_PIN) == LOW)
-        {
-            debounce++;
-            delay(20);
-        }
-    }
-    if (debounce != dcount)
-    {
-        return;
-    }
     // Setup the pots as analog in...
     pinMode(POT_BRIGHTNESS_PIN, INPUT_ANALOG);
-    pinMode(POT_FREQUENCY_PIN, INPUT_ANALOG);
+    pinMode(POT_PRESCALE_PIN, INPUT_ANALOG);
 
     ramp_motor_up();
     delay(500);
+
 #ifdef SERIAL_DEBUG
-    SerialUSB.println("listening to pots..."); 
+    SerialUSB.println("Entering maintenance mode...");
 #endif
 
     TIMER_COUNT = PHASE_COUNT;
@@ -210,34 +213,19 @@ void maintenance_mode()
     while (1)
     {
         int bv = avgAnalogRead(POT_BRIGHTNESS_PIN);
-        bv = max(2, (int)(6.0 * (bv / 4095.0)));
+        bv = scale(bv, 0, 4095, MAX_BRIGHTNESS, MIN_BRIGHTNESS);
         if(BRIGHTNESS != bv)
         {
             BRIGHTNESS = bv;
             eeprom_save();
         }
 
-        debounce = 0;
-        dcount = 0;
-        for( ; dcount <= 5; dcount++)
+        int pv = avgAnalogRead(POT_PRESCALE_PIN);
+        bv = scale(bv, 0, 4095, MAX_PRESCALE, MIN_PRESCALE);
+        if (PRESCALE != pv)
         {
-            if (digitalRead(BUTTON_MAINTENANCE_PIN) == LOW)
-            {
-                debounce++;
-                delay(20);
-            } else
-            {
-                break;
-            }
-        }
-
-        if (debounce == dcount)
-        {
-            int pv = avgAnalogRead(POT_FREQUENCY_PIN);
-            pv = DEFAULT_PRESCALE + (int)(50.0 * (pv / 4095.0) - 25);
             PRESCALE = pv;
-            set_prescale();
-            update_timers();
+            set_prescale(true);
             eeprom_save();
         }
 
@@ -285,40 +273,32 @@ void setup()
     pinMode(MOTOR_EN_PIN, OUTPUT);
     digitalWrite(MOTOR_EN_PIN, LOW);
 
-    /* configure timers */
-    maintenance_mode();
-    TIMER_COUNT = PHASE_COUNT * 32;
-    configure_timers();
-    start_timers();
+    // check to see if the maintenance button
+    // is being held down
+    if (debounce(BUTTON_MAINTENANCE_PIN, LOW))
+    {
+        maintenance_mode();
+    } else
+    {
+        TIMER_COUNT = PHASE_COUNT * 32;
+        configure_timers();
+        start_timers();
+    }
 }
 
 void loop()
 {
     delay(100);
+
     /* wait for button press */
-    int debounce = 0;
-    while(debounce < 5)
-    {
-        if (digitalRead(BUTTON_STARTUP_PIN) == HIGH)
-        {
-            debounce++;
-            delay(20);
-        }
-        else
-        {
-            debounce = 0;
-        }
-    }
+    while (!debounce(BUTTON_STARTUP_PIN, HIGH))
+    {}
         
     digitalWrite(LED_PIN, LOW);
     ramp_motor_up();
     delay(500);
     reset_slink();
-    bool running = true;
-    while(running)
-    {
-        running = slink_loop();
-    }
+    while(slink_loop()) {}
     ramp_motor_down();
 }
 

@@ -17,14 +17,19 @@
 /* configuration variables */
 #define DEFAULT_BRIGHTNESS      3
 #define ADDRESS_BRIGHTNESS      0x10
+#define MAX_BRIGHTNESS          6
+#define MIN_BRIGHTNESS          2
+
 #define DEFAULT_PRESCALE        (CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY))
 #define ADDRESS_PRESCALE        0x11
+#define MAX_PRESCALE            (DEFAULT_PRESCALE + 200)
+#define MIN_PRESCALE            (DEFAULT_PRESCALE - 200)
 
 /* pins */
 #define MOTOR_PWM_PIN           7
 #define LED_PIN                 13
 #define POT_BRIGHTNESS_PIN      18
-#define POT_FREQUENCY_PIN       19
+#define POT_PRESCALE_PIN        19
 #define RANDOM_PIN              20
 #define BUTTON_STARTUP_PIN      34
 #define BUTTON_MAINTENANCE_PIN  33
@@ -41,5 +46,10 @@ typedef struct animation_info
 } animation_info_t;  
 
 const int ch_to_pin[] = {D2, D3, D1, D0, D12, D11, D27, D28, D5, D9, D14, D24};
+
+float scale(float x, float in_min, float in_max, float out_min, float out_max)
+{
+    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
 
 #endif //  __DEFINES_H__
