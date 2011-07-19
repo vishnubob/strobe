@@ -1,6 +1,7 @@
 #include "wirish.h"
 #include "defines.h"
 #include "TimerControl.h"
+#include <EEPROM.h>
 
 // animations
 const animation_info_t animation_info[] =
@@ -12,6 +13,12 @@ const animation_info_t animation_info[] =
 
 // TimerChannels
 extern TimerChannel TimerChannels[CHANNEL_COUNT];
+// Brightness
+extern uint16 BRIGHTNESS;
+// Prescale
+extern uint16 PRESCALE;
+// TimerCount
+extern uint16 TIMER_COUNT;
 
 // overall counter
 int32 timeSoFar = 0; 
@@ -48,20 +55,22 @@ void ramp_motor_up()
 {
     analogWrite(MOTOR_PWM_PIN, 0);
     digitalWrite(MOTOR_EN_PIN, HIGH);
-    for(int speed = 0; speed <= MOTOR_MAX_SPEED; speed += 1)
+    for(int speed = 100; speed <= MOTOR_MAX_SPEED; speed += 1)
     {
         analogWrite(MOTOR_PWM_PIN, speed);         
-        delayMicroseconds(800);                            
+        delayMicroseconds(50704);                            
     } 
 }
 
 void ramp_motor_down()
 {
+    /*
     for(int speed = MOTOR_MAX_SPEED; speed >= 0; speed -= 1)
     {
         analogWrite(MOTOR_PWM_PIN, speed);         
-        delayMicroseconds(800);                            
+        delayMicroseconds(50704);                            
     } 
+    */
     analogWrite(MOTOR_PWM_PIN, 0);
     digitalWrite(MOTOR_EN_PIN, LOW);
 }
@@ -92,8 +101,8 @@ bool slink_loop()
             // angular position
             previous_phase[ch] = phase[ch];
             phase[ch] = calcNextFrame(ch);
-            SerialUSB.print(phase[ch] - previous_phase[ch]);
-            SerialUSB.print(" ");
+            //SerialUSB.print(phase[ch] - previous_phase[ch]);
+            //SerialUSB.print(" ");
 #ifndef SERIAL_DEBUG
             TimerChannels[ch].push_back(phase[ch] - previous_phase[ch]);
 #endif
@@ -134,28 +143,151 @@ bool slink_loop()
     return true;
 }
 
+int avgAnalogRead(int pin, int samples = 50)
+{
+    float sum = 0;
+    for(int idx = 0; idx < samples; ++idx)
+    {
+        sum += analogRead(pin);
+    }
+    return (int)(sum / samples);
+}
+
+void eeprom_save()
+{
+    EEPROM.write(ADDRESS_BRIGHTNESS, BRIGHTNESS);
+    EEPROM.write(ADDRESS_PRESCALE, PRESCALE);
+#ifdef SERIAL_DEBUG
+    SerialUSB.print("Written B=");
+    SerialUSB.print(BRIGHTNESS);
+    SerialUSB.print(" F=");
+    SerialUSB.println(PRESCALE);
+#endif
+}
+
+void eeprom_load()
+{
+    BRIGHTNESS = EEPROM.read(ADDRESS_BRIGHTNESS);
+    PRESCALE = EEPROM.read(ADDRESS_PRESCALE);
+#ifdef SERIAL_DEBUG
+    SerialUSB.print("Loaded B=");
+    SerialUSB.print(BRIGHTNESS);
+    SerialUSB.print(" F=");
+    SerialUSB.println(PRESCALE);
+#endif
+}
+
+void maintenance_mode()
+{
+    int debounce = 0;
+    int dcount = 0;
+    for( ; dcount <= 5; dcount++)
+    {
+        if (digitalRead(BUTTON_MAINTENANCE_PIN) == LOW)
+        {
+            debounce++;
+            delay(20);
+        }
+    }
+    if (debounce != dcount)
+    {
+        return;
+    }
+    // Setup the pots as analog in...
+    pinMode(POT_BRIGHTNESS_PIN, INPUT_ANALOG);
+    pinMode(POT_FREQUENCY_PIN, INPUT_ANALOG);
+
+    ramp_motor_up();
+    delay(500);
+#ifdef SERIAL_DEBUG
+    SerialUSB.println("listening to pots..."); 
+#endif
+
+    TIMER_COUNT = PHASE_COUNT;
+    configure_timers();
+    start_timers();
+
+    while (1)
+    {
+        int bv = avgAnalogRead(POT_BRIGHTNESS_PIN);
+        bv = max(2, (int)(6.0 * (bv / 4095.0)));
+        if(BRIGHTNESS != bv)
+        {
+            BRIGHTNESS = bv;
+            eeprom_save();
+        }
+
+        debounce = 0;
+        dcount = 0;
+        for( ; dcount <= 5; dcount++)
+        {
+            if (digitalRead(BUTTON_MAINTENANCE_PIN) == LOW)
+            {
+                debounce++;
+                delay(20);
+            } else
+            {
+                break;
+            }
+        }
+
+        if (debounce == dcount)
+        {
+            int pv = avgAnalogRead(POT_FREQUENCY_PIN);
+            pv = DEFAULT_PRESCALE + (int)(50.0 * (pv / 4095.0) - 25);
+            PRESCALE = pv;
+            set_prescale();
+            update_timers();
+            eeprom_save();
+        }
+
+        delay(100);
+    }
+}
+
 void setup()
 {
-#ifndef SERIAL_DEBUG
-    /* Turn off USB */
+#ifdef SERIAL_DEBUG
+    while(SerialUSB.available() == 0)
+    {}
+    SerialUSB.println("Booting...");
+#else
     SerialUSB.end();
 #endif
+
+    if(EEPROM.init() != EEPROM_OK)
+    {
+        EEPROM.format();
+        BRIGHTNESS = DEFAULT_BRIGHTNESS;
+        PRESCALE = DEFAULT_PRESCALE;
+        eeprom_save();
+    } else
+    {
+        eeprom_load();
+    }
+
     /* random seed */
     pinMode(RANDOM_PIN, INPUT_ANALOG);
-    randomSeed(analogRead(0));
+    randomSeed(analogRead(RANDOM_PIN));
 
     /* Debug LED */
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, HIGH);
 
     /* misc pins */
-    pinMode(BUTTON_PIN, INPUT_PULLUP);
+    pinMode(BUTTON_STARTUP_PIN, INPUT_PULLUP);
+    pinMode(BUTTON_MAINTENANCE_PIN, INPUT_PULLUP);
+
+    /* Motor */
+    Timer1.setOverflow(1024);
     pinMode(MOTOR_PWM_PIN, PWM);
     analogWrite(MOTOR_PWM_PIN, 0);
     pinMode(MOTOR_EN_PIN, OUTPUT);
     digitalWrite(MOTOR_EN_PIN, LOW);
 
     /* configure timers */
+    maintenance_mode();
+    TIMER_COUNT = PHASE_COUNT * 32;
     configure_timers();
     start_timers();
 }
@@ -167,7 +299,7 @@ void loop()
     int debounce = 0;
     while(debounce < 5)
     {
-        if (digitalRead(BUTTON_PIN) == LOW)
+        if (digitalRead(BUTTON_STARTUP_PIN) == HIGH)
         {
             debounce++;
             delay(20);

@@ -39,6 +39,8 @@ void configure_timers();
 void start_timers();
 void stop_timers();
 void reset_timers();
+void update_timers();
+void set_prescale();
 
 // Low level interrupts
 void timer2_ch1_interrupt(void);

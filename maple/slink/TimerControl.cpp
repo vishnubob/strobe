@@ -4,6 +4,15 @@
 // TimerChannel
 TimerChannel TimerChannels[CHANNEL_COUNT];
 
+// Brightness
+uint16 BRIGHTNESS;
+
+// Prescale
+uint16 PRESCALE;
+
+// Timer Count
+uint16 TIMER_COUNT;
+
 // Channel Map
 // This associates a Pin with a timer, a channel, and a compare interrupt.
 // It is used to initialize the individual TimerChannel objects.
@@ -181,6 +190,20 @@ inline void TimerChannel::isr(void)
     }
 } 
 
+void set_prescale()
+{
+    Timer2.setPrescaleFactor(PRESCALE);
+    Timer3.setPrescaleFactor(PRESCALE);
+    Timer4.setPrescaleFactor(PRESCALE);
+}
+
+void update_timers()
+{
+    Timer2.generateUpdate();
+    Timer3.generateUpdate();
+    Timer4.generateUpdate();
+}
+
 // Configure Timers
 void configure_timers()
 {
@@ -191,22 +214,25 @@ void configure_timers()
     stop_timers();
 
     // Timer2
-    Timer2.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
+    //Timer2.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
     Timer2.setOverflow(TIMER_COUNT - 1);
     // Timer2 is configured as a master
     timer2->CR2 |= (1 << 4);
 
     // Timer3 */
-    Timer3.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
+    //Timer3.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
     Timer3.setOverflow(TIMER_COUNT - 1);
     // Connect timer3 to timer2 (ITR1), trigger mode
     timer3->SMCR = (1 << 4) | 6;
     
     // Timer4 */
-    Timer4.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
+    //Timer4.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
     Timer4.setOverflow(TIMER_COUNT - 1);
     // Connect timer4 to timer2 (ITR1), trigger mode
     timer4->SMCR = (1 << 4) | 6;
+
+    // Set the timer prescales
+    set_prescale();
 
     // Initialize the Timer Channels
     for(int x = 0; x < CHANNEL_COUNT; ++x)
