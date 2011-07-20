@@ -205,7 +205,7 @@ void set_prescale(bool sync)
 }
 
 // Configure Timers
-void configure_timers()
+void configure_timers(bool uev_enable)
 {
     timer_port *timer2 = timer_dev_table[TIMER2].base;
     timer_port *timer3 = timer_dev_table[TIMER3].base;
@@ -218,24 +218,26 @@ void configure_timers()
     Timer2.setOverflow(TIMER_COUNT - 1);
     // Timer2 is configured as a master
     timer2->CR2 |= (1 << 4);
-    // Select Update request source to be driven by overflow
-    timer2->CR1 |= (1 << 2);
 
     // Timer3 */
     //Timer3.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
     Timer3.setOverflow(TIMER_COUNT - 1);
     // Connect timer3 to timer2 (ITR1), trigger mode
     timer3->SMCR = (1 << 4) | 6;
-    // Select Update request source to be driven by overflow
-    timer3->CR1 |= (1 << 2);
     
     // Timer4 */
     //Timer4.setPrescaleFactor(CLOCK_FREQUENCY / (PHASE_COUNT * BASE_FREQUENCY));
     Timer4.setOverflow(TIMER_COUNT - 1);
     // Connect timer4 to timer2 (ITR1), trigger mode
     timer4->SMCR = (1 << 4) | 6;
+
     // Select Update request source to be driven by overflow
-    timer4->CR1 |= (1 << 2);
+    if (uev_enable)
+    {
+        timer4->CR1 |= (1 << 2);
+        timer2->CR1 |= (1 << 2);
+        timer3->CR1 |= (1 << 2);
+    }
 
     // Set the timer prescales
     set_prescale();

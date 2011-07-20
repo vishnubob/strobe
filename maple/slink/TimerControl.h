@@ -35,7 +35,7 @@ private:
     uint8                   _state;
 };
 
-void configure_timers();
+void configure_timers(bool enable_uev = false);
 void start_timers();
 void stop_timers();
 void reset_timers();

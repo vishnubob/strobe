@@ -48,10 +48,19 @@ int32 startPosition[CHANNEL_COUNT];
 int32 returnDistance[CHANNEL_COUNT];
 
 /*******************************************************************************
+ ** Utility
+ ******************************************************************************/
+
+float scale(float x, float in_min, float in_max, float out_min, float out_max)
+{
+    return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+/*******************************************************************************
  ** Setup / Loop
  ******************************************************************************/
 
-bool debounce(int pin, int level)
+bool debounce(int pin, unsigned int level)
 {
     int debounce = 0;
     int dcount = 0;
@@ -183,8 +192,8 @@ void eeprom_save()
 
 void eeprom_load()
 {
-    BRIGHTNESS = max(BRIGHTNESS_MIN, min(BRIGHTNESS_MAX, EEPROM.read(ADDRESS_BRIGHTNESS)));
-    PRESCALE = max(PRESCALE_MIN, min(PRESCALE_MAX, EEPROM.read(ADDRESS_PRESCALE)));
+    BRIGHTNESS = max(MIN_BRIGHTNESS, min(MAX_BRIGHTNESS, EEPROM.read(ADDRESS_BRIGHTNESS)));
+    PRESCALE = max(MIN_PRESCALE, min(MAX_PRESCALE, EEPROM.read(ADDRESS_PRESCALE)));
 #ifdef SERIAL_DEBUG
     SerialUSB.print("Loaded B=");
     SerialUSB.print(BRIGHTNESS);
@@ -207,7 +216,7 @@ void maintenance_mode()
 #endif
 
     TIMER_COUNT = PHASE_COUNT;
-    configure_timers();
+    configure_timers(true);
     start_timers();
 
     while (1)
@@ -221,7 +230,7 @@ void maintenance_mode()
         }
 
         int pv = avgAnalogRead(POT_PRESCALE_PIN);
-        bv = scale(bv, 0, 4095, MAX_PRESCALE, MIN_PRESCALE);
+        pv = scale(pv, 0, 4095, MAX_PRESCALE, MIN_PRESCALE);
         if (PRESCALE != pv)
         {
             PRESCALE = pv;
@@ -296,7 +305,7 @@ void loop()
         
     digitalWrite(LED_PIN, LOW);
     ramp_motor_up();
-    delay(500);
+    //delay(500);
     reset_slink();
     while(slink_loop()) {}
     ramp_motor_down();
