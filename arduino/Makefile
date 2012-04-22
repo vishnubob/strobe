@@ -4,8 +4,9 @@
 # Name of target controller 
 # (e.g. 'at90s8515', see the available avr-gcc mmcu 
 # options for possible values)
-MCU=atmega328
+MCU=atmega328p
 F_CPU=16000000
+ARDUINO_PORT=/dev/tty.usbmodem1d11
 
 # id to use with programmer
 # default: PROGRAMMER_MCU=$(MCU)
@@ -13,7 +14,7 @@ F_CPU=16000000
 # accept the same MCU name as avr-gcc (for example
 # for ATmega8s, avr-gcc expects 'atmega8' and 
 # avrdude requires 'm8')
-PROGRAMMER_MCU=m328
+PROGRAMMER_MCU=m328p
 
 # Name of our project
 # (use a single word, e.g. 'myproject')
@@ -186,7 +187,7 @@ hex: $(HEXTRG)
 
 upload: hex
 	$(AVRDUDE) -c arduino   			\
-	-p m328p  -P /dev/tty.usbserial-A700dDbm -D 	\
+	-p m328p  -P $(ARDUINO_PORT) -D 	\
 	-F \
 	-i 1 \
 	-b 57600	\

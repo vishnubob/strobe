@@ -3,6 +3,7 @@
 #include <math.h>
 #include <util/delay.h>
 #include <avr/wdt.h> 
+#include <stdlib.h>
 
 // configurable options
 #define CPU_FREQ            16000000
@@ -69,6 +70,8 @@ void setup(void)
 void loop(void)
 {
     static long v = 0;
+    char hz_value_str[12];
+    double hz_value;
 
     if (Serial.available()) 
     {
@@ -113,13 +116,20 @@ void loop(void)
                     off_value--;
                 break;
         }
+        // build the Hz string
+        hz_value = (CPU_FREQ / OCR1A / (double)on_value);
+        dtostrf(hz_value, 6, 4, hz_value_str);
+
         Serial.println("");
         Serial.print("Value:");
         Serial.print(v);
         Serial.print(" on: ");
         Serial.print(on_value);
         Serial.print(" off: ");
-        Serial.println(off_value);
+        Serial.print(off_value);
+        Serial.print(" (");
+        Serial.print(hz_value_str);
+        Serial.println(" Hz)");
         Serial.print("> ");
     }
 }
