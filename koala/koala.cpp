@@ -3,10 +3,13 @@
 #include <avr/wdt.h> 
 #include "arduino/Arduino.h"
 #include "arduino/EEPROM.h"
+#include "DualVNH5019MotorShield.h"
 
-#define STROBE_PIN              6 
-#define VOICECOIL1_PIN          5
-#define VOICECOIL2_PIN          4
+DualVNH5019MotorShield md;
+
+#define STROBE_PIN              3 
+#define VOICECOIL1_PIN          0
+#define VOICECOIL2_PIN          1
 #define VOICECOIL_COUNT         2
 #define STROBE_INDEX            2
 #define DEVICE_COUNT            3
@@ -28,7 +31,7 @@ const int _device_map[] = {VOICECOIL1_PIN, VOICECOIL2_PIN, STROBE_PIN};
 class Pin
 {
 public:
-    void init(unsigned char pin, 
+    void virtual init(unsigned char pin, 
                 unsigned char step_on = 0, unsigned char step_off = 0, 
                 bool enable = false, unsigned int max_off=-1)
     {
@@ -42,16 +45,14 @@ public:
         off();
     }
 
-    void inline off() 
+    void inline virtual off() 
     {
         digitalWrite(_pin, LOW);
-        _state = LOW;
     }
 
-    void inline on()
+    void inline virtual on()
     {
         digitalWrite(_pin, HIGH);
-        _state = HIGH;
     }
 
     void disable() 
@@ -79,10 +80,10 @@ public:
         double us_value;
         
         // build the Hz string
-        hz_value = (CPU_FREQ / OCR1A / (double)_step_on);
+        hz_value = (CPU_FREQ / OCR2A / 32.0 / (double)_step_on);
         dtostrf(hz_value, 6, 4, hz_value_str);
         // build the ms string
-        us_value = 1.0 / (CPU_FREQ / OCR1A / (double)_step_off) * 1000000;
+        us_value = 1.0 / (CPU_FREQ / OCR2A / 32.0 / (double)_step_off) * 1000000;
         dtostrf(us_value, 6, 1, us_value_str);
 
         Serial.print("Pin:  on: ");
@@ -115,11 +116,13 @@ public:
         if((_state) && (_counter >= _step_off))
         {
             off();
+            _state = LOW;
             _counter = 0;
         } else
         if ((!_state) && (_counter >= (_step_on + _step_offset)))
         {
             on();
+            _state = HIGH;
             _counter = 0;
         }
     }
@@ -140,7 +143,7 @@ public:
     unsigned int get_step_off() const { return _step_off; }
     unsigned char get_state() const { return _state; }
     
-private:
+protected:
     unsigned int _counter;
     unsigned int _step_on;
     unsigned int _step_off;
@@ -151,6 +154,65 @@ private:
     bool _state;
 };
 
+class VoiceCoilPin : public Pin
+{
+public:
+    void init(unsigned char pin, 
+                unsigned char step_on = 0, unsigned char step_off = 0, 
+                bool enable = false, unsigned int max_off=-1)
+    {
+        _counter = 0;
+        _pin = pin;
+        _enable = enable;
+        _max_off = max_off;
+        _interval = false;
+        set_step_on(step_on);
+        set_step_off(step_off);
+        off();
+    }
+
+    void inline on() 
+    {
+        if (_pin == 0)
+        {
+            if (_interval)
+            {
+                md.setM1Speed(400);
+            } else
+            {
+                md.setM1Speed(-400);
+            }
+        } else
+        if (_pin == 1)
+        {
+            if (_interval)
+            {
+                md.setM2Speed(-400);
+            } else
+            {
+                md.setM2Speed(400);
+            }
+        }
+        _interval = !_interval;
+    }
+
+    void inline off()
+    {
+        if (_pin == 0)
+        {
+            //md.setM1Speed(-400);
+            md.setM1Brake(400);
+        } else
+        if (_pin == 1)
+        {
+            //md.setM2Speed(400);
+            md.setM2Brake(400);
+        }
+    }
+private:
+    bool _interval;
+};
+
 /******************************************************************************
  ** PinSet
  ******************************************************************************/
@@ -158,16 +220,18 @@ private:
 class PinSet
 {
 public:
-    PinSet()
+    void init()
     {
         for(unsigned char idx = 0; idx < DEVICE_COUNT; ++idx) 
         {
             if (idx == STROBE_INDEX)
             {
-                _devices[idx].init(_device_map[idx], 0, 0, false, MAX_BRIGHTNESS);
+                _devices[idx] = new Pin;
+                _devices[idx]->init(_device_map[idx], 0, 0, false, MAX_BRIGHTNESS);
             } else
             {
-                _devices[idx].init(_device_map[idx]);
+                _devices[idx] = new VoiceCoilPin;
+                _devices[idx]->init(_device_map[idx]);
             }
         }
     }
@@ -175,23 +239,23 @@ public:
     void voicecoils_enable()
     {
         for(unsigned char idx = 0; idx < VOICECOIL_COUNT; ++idx) 
-            _devices[idx].enable();
+            _devices[idx]->enable();
     }
 
     void voicecoils_disable()
     {
         for(unsigned char idx = 0; idx < VOICECOIL_COUNT; ++idx) 
-            _devices[idx].disable();
+            _devices[idx]->disable();
     }
 
     void strobe_enable()
     {
-        _devices[STROBE_INDEX].enable();
+        _devices[STROBE_INDEX]->enable();
     }
 
     void strobe_disable()
     {
-        _devices[STROBE_INDEX].disable();
+        _devices[STROBE_INDEX]->disable();
     }
 
     void enable()
@@ -210,54 +274,54 @@ public:
     {
         set_default_timings();
         for(unsigned char idx = 0; idx < DEVICE_COUNT; ++idx) 
-            _devices[idx].reset_offset();
-        bitclr(TIMSK1, OCIE1A);
+            _devices[idx]->reset_offset();
+        bitclr(TIMSK2, OCIE2A);
         for(unsigned char idx = 0; idx < DEVICE_COUNT; ++idx) 
         {
-            _devices[idx].sync();
+            _devices[idx]->sync();
         }
-        bitset(TIMSK1, OCIE1A);
+        bitset(TIMSK2, OCIE2A);
     }
 
     void set_default_timings()
     {
-        for(int idx = 0; idx < DEVICE_COUNT; ++idx)
-        {
-            _devices[idx].set_step(533, 1);
-        }
+        for(unsigned char idx = 0; idx < VOICECOIL_COUNT; ++idx) 
+            _devices[idx]->set_step(20, 10);
+        _devices[STROBE_INDEX]->set_step(260, 1);
     }
 
     void voicecoil_set_step(unsigned int _on, unsigned int _off)
     {
         for(unsigned char idx = 0; idx < VOICECOIL_COUNT; ++idx) 
         {
-            _devices[idx].set_step_on(_on);
-            _devices[idx].set_step_off(_off);
+            _devices[idx]->set_step_on(_on);
+            _devices[idx]->set_step_off(_off);
         }
     }
 
     void strobe_set_step(unsigned int _on, unsigned int _off)
     {
-        _devices[STROBE_INDEX].set_step_on(_on);
-        _devices[STROBE_INDEX].set_step_off(_off);
+        _devices[STROBE_INDEX]->set_step_on(_on);
+        _devices[STROBE_INDEX]->set_step_off(_off);
     }
 
     void inline step()
     {
         for(unsigned char idx = 0; idx < DEVICE_COUNT; ++idx)
         {
-            _devices[idx].step();
+            _devices[idx]->step();
         }
     }
 
     Pin &operator[] (int idx)
     {
         idx = min(STROBE_INDEX, max(0, idx));
-        return _devices[idx];
+        return *(_devices[idx]);
     }
 
 private:
-    Pin _devices[DEVICE_COUNT];
+    //Pin _devices[DEVICE_COUNT];
+    Pin *_devices[DEVICE_COUNT];
 };
 
 /******************************************************************************
@@ -376,34 +440,34 @@ void setup()
 {
     // disable global interrupts
     cli();
-
+    
     Serial.begin(57600);
     Serial.println("");
     Serial.print("[");
     
-    // setup timer1 - 16
-    // resonsible for timing the camera after an event
-    TCCR1A = 0;
-    TCCR1B = 0;
-    /*
-    // 1:256
-    bitset(TCCR1B, CS12);
-    */
-    /*
-    // 1:64
-    bitset(TCCR1B, CS11);
-    bitset(TCCR1B, CS10);
-    */
-    // 1:1
-    bitset(TCCR1B, CS10);
+    // setup timer2 - 8bits 
+    TCCR2A = 0;
+    TCCR2B = 0;
+    // 1:8
+    bitset(TCCR2B, CS21);
+    bitset(TCCR2B, CS20);
 
     // select CTC mode
-    bitset(TCCR1B, WGM12);
+    bitset(TCCR2A, WGM21);
     // start the exposure loop
-    OCR1A = 500;
+    OCR2A = 32;
     // enable compare interrupt
-    bitset(TIMSK1, OCIE1A);
+    bitset(TIMSK2, OCIE2A);
     Serial.print("timer... ");
+
+    // init hbridge
+    Serial.print("hbridge... ");
+    md.init();
+    
+    Serial.print("pins... ");
+    pins.init();
+    pins.reset();
+    pins.enable();
 
     // enable global interrupts
     sei();
@@ -411,7 +475,6 @@ void setup()
 
     // init
     Serial.println("init done!");
-    pins.enable();
 }
 
 
@@ -429,6 +492,7 @@ void Prompt(void)
     static unsigned char onoff = 0;
 
     char ch = Serial.read();
+    Serial.println(ch);
 
     switch(ch) {
         /* numbers / values */
@@ -641,7 +705,6 @@ void Prompt(void)
 
 void loop()
 {
-    pins.reset();
     for(;;)
     {
         for (uint8_t ch = 0; ch < DEVICE_COUNT; ++ch)
@@ -658,8 +721,7 @@ void loop()
     }
 }
 
-
-ISR(TIMER1_COMPA_vect) 
+ISR(TIMER2_COMPA_vect) 
 {
     pins.step();
 }

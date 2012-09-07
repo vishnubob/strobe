@@ -6,7 +6,7 @@
 # options for possible values)
 MCU=atmega328p
 F_CPU=16000000
-ARDUINO_PORT=/dev/tty.usbmodemfd121
+ARDUINO_PORT=/dev/tty.usbmodem1d11
 
 # id to use with programmer
 # default: PROGRAMMER_MCU=$(MCU)
@@ -31,7 +31,6 @@ arduino/HardwareSerial.cpp \
 arduino/IPAddress.cpp \
 arduino/Print.cpp \
 arduino/Stream.cpp \
-arduino/Tone.cpp \
 arduino/USBCore.cpp \
 arduino/WInterrupts.c \
 arduino/WMath.cpp \
@@ -44,6 +43,7 @@ arduino/wiring_digital.c \
 arduino/wiring_pulse.c \
 arduino/wiring_shift.c \
 arduino/EEPROM.c \
+DualVNH5019MotorShield.cpp \
 koala.cpp
 
 # additional includes (e.g. -I/path/to/mydir)

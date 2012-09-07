@@ -237,6 +237,7 @@ void init()
 	#warning this needs to be finished
 #endif
 
+/*
 	// set timer 2 prescale factor to 64
 #if defined(TCCR2) && defined(CS22)
 	sbi(TCCR2, CS22);
@@ -254,6 +255,7 @@ void init()
 #else
 	#warning Timer 2 not finished (may not be present on this CPU)
 #endif
+*/
 
 #if defined(TCCR3B) && defined(CS31) && defined(WGM30)
 	sbi(TCCR3B, CS31);		// set timer 3 prescale factor to 64
