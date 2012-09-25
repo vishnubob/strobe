@@ -80,7 +80,7 @@ public:
         double us_value;
         
         // build the Hz string
-        hz_value = (CPU_FREQ / OCR2A / 32.0 / (double)_step_on);
+        hz_value = (CPU_FREQ / OCR2A / 32.0 / (double)(_step_on + _step_off));
         dtostrf(hz_value, 6, 4, hz_value_str);
         // build the ms string
         us_value = 1.0 / (CPU_FREQ / OCR2A / 32.0 / (double)_step_off) * 1000000;
@@ -175,38 +175,23 @@ public:
     {
         if (_pin == 0)
         {
-            if (_interval)
-            {
-                md.setM1Speed(400);
-            } else
-            {
-                md.setM1Speed(-400);
-            }
+            md.setM1Speed(400);
         } else
         if (_pin == 1)
         {
-            if (_interval)
-            {
-                md.setM2Speed(-400);
-            } else
-            {
-                md.setM2Speed(400);
-            }
+            md.setM2Speed(400);
         }
-        _interval = !_interval;
     }
 
     void inline off()
     {
         if (_pin == 0)
         {
-            //md.setM1Speed(-400);
-            md.setM1Brake(400);
+            md.setM1Speed(-400);
         } else
         if (_pin == 1)
         {
-            //md.setM2Speed(400);
-            md.setM2Brake(400);
+            md.setM2Speed(-400);
         }
     }
 private:
@@ -275,19 +260,27 @@ public:
         set_default_timings();
         for(unsigned char idx = 0; idx < DEVICE_COUNT; ++idx) 
             _devices[idx]->reset_offset();
+        cli();
         bitclr(TIMSK2, OCIE2A);
         for(unsigned char idx = 0; idx < DEVICE_COUNT; ++idx) 
         {
             _devices[idx]->sync();
         }
         bitset(TIMSK2, OCIE2A);
+        sei();
     }
 
     void set_default_timings()
     {
         for(unsigned char idx = 0; idx < VOICECOIL_COUNT; ++idx) 
-            _devices[idx]->set_step(20, 10);
-        _devices[STROBE_INDEX]->set_step(260, 1);
+        {
+            //_devices[idx]->set_step(130, 130);
+            // Film rate
+            _devices[idx]->set_step(157, 158);
+        }
+        //_devices[STROBE_INDEX]->set_step(259, 1);
+        // Film rate
+        _devices[STROBE_INDEX]->set_step(306, 9);
     }
 
     void voicecoil_set_step(unsigned int _on, unsigned int _off)
@@ -577,6 +570,7 @@ void Prompt(void)
             if (pins[STROBE_INDEX].get_step_off() < MAX_BRIGHTNESS)
             {
                 pins[STROBE_INDEX].set_step_off(pins[STROBE_INDEX].get_step_off() + 1);
+                pins[STROBE_INDEX].set_step_on(pins[STROBE_INDEX].get_step_on() - 1);
                 Serial.println("");
                 Serial.println("strobe brightness increased");
             } else
@@ -589,6 +583,7 @@ void Prompt(void)
             if (pins[STROBE_INDEX].get_step_off() > 0)
             {
                 pins[STROBE_INDEX].set_step_off(pins[STROBE_INDEX].get_step_off() - 1);
+                pins[STROBE_INDEX].set_step_on(pins[STROBE_INDEX].get_step_on() + 1);
                 Serial.println("");
                 Serial.println("strobe brightness decreased");
             } else
@@ -702,6 +697,53 @@ void Prompt(void)
 /******************************************************************************
  ** Main loop
  ******************************************************************************/
+
+void _loop(void)
+{
+    if (!Serial.available()) return;
+
+    static long v = 0;
+    static unsigned char channel = 0;
+    static unsigned char onoff = 0;
+
+    char ch = Serial.read();
+    Serial.println(ch);
+
+    switch(ch) {
+        /* numbers / values */
+        case '0'...'9':
+            v = v * 10 + ch - '0';
+            break;
+        case '-':
+            v *= -1;
+            break;
+        case 'z':
+            v = 0;
+            break;
+        case 'm':
+            md.setM1Speed(v);
+            v = 0;
+            Serial.println("M1 Speed Set.");
+            break;
+        case 'M':
+            md.setM2Speed(v);
+            v = 0;
+            Serial.println("M2 Speed Set.");
+            break;
+        case 'b':
+            md.setM1Brake(v);
+            v = 0;
+            Serial.println("M1 Brake Set.");
+            break;
+        case 'B':
+            md.setM2Brake(v);
+            v = 0;
+            Serial.println("M2 Brake Set.");
+            break;
+    }
+    Serial.print("Value: ");
+    Serial.println(v);
+}
 
 void loop()
 {

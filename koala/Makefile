@@ -6,7 +6,7 @@
 # options for possible values)
 MCU=atmega328p
 F_CPU=16000000
-ARDUINO_PORT=/dev/tty.usbmodem1d11
+ARDUINO_PORT=/dev/tty.usbmodemfd441
 
 # id to use with programmer
 # default: PROGRAMMER_MCU=$(MCU)
