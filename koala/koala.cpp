@@ -14,7 +14,7 @@ DualVNH5019MotorShield md;
 #define STROBE_INDEX            2
 #define DEVICE_COUNT            3
 #define PROMPT_ENABLE           1
-#define MAX_BRIGHTNESS          10
+#define MAX_BRIGHTNESS          15
 #define CPU_FREQ                16000000
 
 // Helper macros for frobbing bits
@@ -23,6 +23,7 @@ DualVNH5019MotorShield md;
 #define bittst(var,bitno) (var& (1 << (bitno)))
 
 const int _device_map[] = {VOICECOIL1_PIN, VOICECOIL2_PIN, STROBE_PIN};
+uint16_t motor_power = 400;
 
 /******************************************************************************
  ** Pin
@@ -175,11 +176,11 @@ public:
     {
         if (_pin == 0)
         {
-            md.setM1Speed(400);
+            md.setM1Speed(motor_power);
         } else
         if (_pin == 1)
         {
-            md.setM2Speed(400);
+            md.setM2Speed(motor_power);
         }
     }
 
@@ -187,11 +188,11 @@ public:
     {
         if (_pin == 0)
         {
-            md.setM1Speed(-400);
+            md.setM1Speed(-motor_power);
         } else
         if (_pin == 1)
         {
-            md.setM2Speed(-400);
+            md.setM2Speed(-motor_power);
         }
     }
 private:
@@ -255,9 +256,12 @@ public:
         strobe_disable();
     }
 
-    void reset()
+    void reset(bool set_default_timing=true)
     {
-        set_default_timings();
+        if (set_default_timing)
+        {
+            set_default_timings();
+        }
         for(unsigned char idx = 0; idx < DEVICE_COUNT; ++idx) 
             _devices[idx]->reset_offset();
         cli();
@@ -274,13 +278,13 @@ public:
     {
         for(unsigned char idx = 0; idx < VOICECOIL_COUNT; ++idx) 
         {
-            //_devices[idx]->set_step(130, 130);
+            _devices[idx]->set_step(130, 130);
             // Film rate
-            _devices[idx]->set_step(157, 158);
+            //_devices[idx]->set_step(157, 158);
         }
-        //_devices[STROBE_INDEX]->set_step(259, 1);
+        _devices[STROBE_INDEX]->set_step(259, 1);
         // Film rate
-        _devices[STROBE_INDEX]->set_step(306, 9);
+        //_devices[STROBE_INDEX]->set_step(306, 9);
     }
 
     void voicecoil_set_step(unsigned int _on, unsigned int _off)
@@ -536,6 +540,18 @@ void Prompt(void)
             Serial.println("");
             Serial.println("on/off toggled");
             break;
+        case 'N':
+            pins[channel].set_offset(1);
+            delay(v);
+            pins[channel].set_offset(0);
+            Serial.println("forward bump");
+            break;
+        case 'n':
+            pins[channel].set_offset(-1);
+            delay(v);
+            pins[channel].set_offset(0);
+            Serial.println("back bump");
+            break;
         case 's':
             if (onoff)
             {
@@ -557,6 +573,34 @@ void Prompt(void)
             pins[channel].set_step_on(pins[channel].get_step_on() + 1);
             Serial.println("");
             Serial.println("pin frequency increased");
+            break;
+        case 'y':
+            unsigned int total_step;
+            total_step = (CPU_FREQ / OCR2A / 32.0 / (double)(v));
+            for(uint8_t dev_idx = 0; dev_idx < DEVICE_COUNT; ++dev_idx)
+            {
+                if (dev_idx == STROBE_INDEX)
+                {
+                    pins[dev_idx].set_step_on(total_step - pins[dev_idx].get_step_off());
+                } else
+                {
+                    pins[dev_idx].set_step_on(total_step / 2);
+                    pins[dev_idx].set_step_off(total_step - pins[dev_idx].get_step_on());
+                }
+                pins.reset(false);
+            }
+            Serial.println("");
+            Serial.print(v);
+            Serial.println("Hz value set!");
+            v = 0;
+            break;
+
+        /* motor power */
+        case 'm':
+            motor_power = min(400, max(0, v));
+            Serial.println("");
+            Serial.println("motor power set");
+            v = 0;
             break;
 
         /* brightness */
@@ -703,8 +747,6 @@ void _loop(void)
     if (!Serial.available()) return;
 
     static long v = 0;
-    static unsigned char channel = 0;
-    static unsigned char onoff = 0;
 
     char ch = Serial.read();
     Serial.println(ch);
