@@ -25,6 +25,8 @@ DualVNH5019MotorShield md;
 const int _device_map[] = {VOICECOIL1_PIN, VOICECOIL2_PIN, STROBE_PIN};
 uint16_t motor_power = 400;
 
+typedef uint16_t quanta_t;
+
 /******************************************************************************
  ** Pin
  ******************************************************************************/
@@ -33,17 +35,18 @@ class Pin
 {
 public:
     void virtual init(unsigned char pin, 
-                unsigned char step_on = 0, unsigned char step_off = 0, 
-                bool enable = false, unsigned int max_off=-1)
+                quanta_t period = 0, quanta_t duty_cycle = 0, 
+                bool enable = false)
     {
         _counter = 0;
+        _offset = 0;
+        _state = false;
         _pin = pin;
         _enable = enable;
-        _max_off = max_off;
         pinMode(_pin, OUTPUT);
-        set_step_on(step_on);
-        set_step_off(step_off);
         off();
+        set_period(period);
+        set_duty_cycle(duty_cycle);
     }
 
     void inline virtual off() 
@@ -61,6 +64,7 @@ public:
         _enable = false; 
         off(); 
     }
+
     void enable() 
     { 
         _enable = true; 
@@ -69,41 +73,32 @@ public:
     void sync()
     {
         off();
-        _counter = 0;
     }
 
 #if PROMPT_ENABLE
     void print()
     {
         char hz_value_str[12];
-        double hz_value;
-        char us_value_str[12];
-        double us_value;
+        float hz_value;
+        char duty_cycle_str[12];
+        float duty_cycle_value;
         
         // build the Hz string
-        hz_value = (CPU_FREQ / OCR2A / 32.0 / (double)(_step_on + _step_off));
+        hz_value = (CPU_FREQ / OCR2A / 32.0 / (float)(_period));
         dtostrf(hz_value, 6, 4, hz_value_str);
-        // build the ms string
-        us_value = 1.0 / (CPU_FREQ / OCR2A / 32.0 / (double)_step_off) * 1000000;
-        dtostrf(us_value, 6, 1, us_value_str);
+        // build duty cycle string
+        duty_cycle_value = (float)(_duty_cycle) / (float)(_period) * 100.0;
+        dtostrf(duty_cycle_value, 6, 1, duty_cycle_str);
 
-        Serial.print("Pin:  on: ");
-        Serial.print(_step_on);
+        Serial.print("Pin:  period: ");
+        Serial.print(_period);
         Serial.print(" (");
         Serial.print(hz_value_str);
-        Serial.print(" Hz) off: ");
-        Serial.print(_step_off);
-        Serial.print(" (");
-        Serial.print(us_value);
-        Serial.print(" us)");
+        Serial.print(" Hz) duty cycle: ");
+        Serial.print(duty_cycle_str);
+        Serial.print("% ");
         Serial.print(" offset: ");
-        Serial.print(_step_offset, DEC);
-        /*
-        Serial.print(" counter: ");
-        Serial.print(_counter, DEC);
-        Serial.print(" state: ");
-        Serial.print(_state, DEC);
-        */
+        Serial.print(_offset, DEC);
         Serial.print(" en: ");
         Serial.println(_enable, DEC);
 
@@ -113,43 +108,47 @@ public:
     void inline virtual step()
     {
         if (!_enable) return;
-        _counter++;
-        if((_state) && (_counter >= _step_off))
-        {
-            off();
-            _state = LOW;
+
+        _counter += 1;
+        if (_counter > _period)
             _counter = 0;
-        } else
-        if ((!_state) && (_counter >= (_step_on + _step_offset)))
+
+        if (_counter < _duty_cycle && !_state)
         {
             on();
-            _state = HIGH;
-            _counter = 0;
+            _state = true;
+        } else if (_counter >= _duty_cycle && _state)
+        {
+            off();
+            _state = false;
         }
     }
 
     /* setters */
-    void virtual set_step_on(unsigned int step) { _step_on = step; }
-    void virtual set_step_off(unsigned int step) { _step_off = min(_max_off, step); }
-    void set_offset(int offset) { _step_offset = offset; }
-    void reset_offset() { _step_offset = 0; }
-    void set_step(unsigned int step_on, unsigned int step_off) 
+    void virtual set_period(quanta_t period)
     { 
-        set_step_on(step_on);
-        set_step_off(step_off);
+        _period = period;
+        set_duty_cycle(_duty_cycle);
+    }
+    void virtual set_duty_cycle(quanta_t duty_cycle) { _duty_cycle = min(duty_cycle, _period); }
+    void set_offset(quanta_t offset) { _offset = offset; }
+    void zero_offset() { _offset = 0; }
+    void set_period_and_duty_cycle(unsigned int period, unsigned int duty_cycle) 
+    { 
+        set_period(period);
+        set_duty_cycle(duty_cycle);
     }
     
     /* getters */
-    unsigned int get_step_on() const { return _step_on; }
-    unsigned int get_step_off() const { return _step_off; }
-    unsigned char get_state() const { return _state; }
+    quanta_t get_offset() const { return _offset; }
+    unsigned int get_period() const { return _period; }
+    unsigned int get_duty_cycle() const { return _duty_cycle; }
     
 protected:
-    unsigned int _counter;
-    unsigned int _step_on;
-    unsigned int _step_off;
-    unsigned int _step_offset;
-    unsigned int _max_off;
+    quanta_t _counter;
+    quanta_t _period;
+    quanta_t _duty_cycle;
+    quanta_t _offset;
     unsigned char _pin;
     bool _enable;
     bool _state;
@@ -158,89 +157,65 @@ protected:
 class VoiceCoilPin : public Pin
 {
 public:
-    void init(unsigned char pin, 
-                unsigned char step_on = 0, unsigned char step_off = 0, 
-                bool enable = false, unsigned int max_off=-1)
-    {
-        _phase = 0;
-        _counter = 0;
-        _pin = pin;
-        _enable = enable;
-        _max_off = max_off;
-        _interval = false;
-        _step_on = step_on;
-        _step_off = step_off;
-        off();
-    }
-
     void calculate_sin_table()
     {
-        _quarter_steps = (_step_on + _step_off) / 4;
-        if (!_quarter_steps)
+        _quarter_step = ceil((float)_period / 4.0);
+        if (!_quarter_step)
         {
             return;
         }
-        double rad_step = (M_PI / 2.0) / (_quarter_steps);
+        float rad_step = (M_PI / 2.0) / (_quarter_step);
 
-        for (uint16_t step = 0; step < _quarter_steps; ++step)
+        for (uint16_t step = 0; step < _quarter_step; ++step)
         {
             int16_t val = sin(step * rad_step) * motor_power;
             _sin_table[step] = val;
         }
     }
 
-    void virtual set_step_on(unsigned int step)
+    void virtual set_period(unsigned int step)
     { 
-        _step_on = step; 
+        _period = step; 
         calculate_sin_table();
     }
 
-    void virtual set_step_off(unsigned int step) 
-    { 
-        _step_off = min(_max_off, step); 
-        calculate_sin_table();
+    int16_t inline get_power(quanta_t counter)
+    {
+        if (counter < _quarter_step)
+            return _sin_table[counter];
+        counter -= _quarter_step;
+        if (counter < _quarter_step)
+            return (_sin_table[_quarter_step - counter - 1]);
+        counter -= _quarter_step;
+        if (counter < _quarter_step)
+            return -(_sin_table[counter]);
+        counter -= _quarter_step;
+        return -(_sin_table[_quarter_step - counter - 1]);
     }
 
     void inline virtual step()
     {
         if (!_enable) return;
+
         _counter += 1;
-        if (_counter >= _quarter_steps)
-        {
+        if (_counter > _period)
             _counter = 0;
-            _phase = (_phase + 1) % 4;
-        }
-        uint16_t power = 0;
-        switch (_phase)
-        {
-            case 0:
-                power = _sin_table[_counter];
-                break;
-            case 1:
-                power = (_sin_table[_quarter_steps - _counter]);
-                break;
-            case 2:
-                power = -(_sin_table[_counter]);
-                break;
-            case 3:
-                power = -(_sin_table[_quarter_steps - _counter]);
-                break;
-        }
-        if (_pin == 0)
+
+        uint16_t power = get_power(_counter);
+        if (_pin == VOICECOIL1_PIN)
         {
             md.setM1Speed(power);
         } else
-        if (_pin == 1)
+        if (_pin == VOICECOIL2_PIN)
         {
             md.setM2Speed(power);
         }
     }
 
 private:
-    bool _interval;
-    uint16_t _quarter_steps;
+    quanta_t counter;
+    uint8_t _quarter_step;
     int16_t _sin_table[100];
-    uint8_t _phase;
 };
 
 /******************************************************************************
@@ -257,12 +232,11 @@ public:
             if (idx == STROBE_INDEX)
             {
                 _devices[idx] = new Pin;
-                _devices[idx]->init(_device_map[idx], 0, 0, false, MAX_BRIGHTNESS);
             } else
             {
                 _devices[idx] = new VoiceCoilPin;
-                _devices[idx]->init(_device_map[idx]);
             }
+            _devices[idx]->init(_device_map[idx]);
         }
     }
 
@@ -302,48 +276,45 @@ public:
 
     void reset(bool set_default_timing=true)
     {
+        bitclr(TIMSK2, OCIE2A);
+        for(unsigned char idx = 0; idx < DEVICE_COUNT; ++idx) 
+        {
+            _devices[idx]->zero_offset();
+            _devices[idx]->sync();
+        }
         if (set_default_timing)
         {
             set_default_timings();
         }
-        for(unsigned char idx = 0; idx < DEVICE_COUNT; ++idx) 
-            _devices[idx]->reset_offset();
-        cli();
-        bitclr(TIMSK2, OCIE2A);
-        for(unsigned char idx = 0; idx < DEVICE_COUNT; ++idx) 
-        {
-            _devices[idx]->sync();
-        }
         bitset(TIMSK2, OCIE2A);
-        sei();
     }
 
     void set_default_timings()
     {
         for(unsigned char idx = 0; idx < VOICECOIL_COUNT; ++idx) 
         {
-            _devices[idx]->set_step(130, 130);
+            _devices[idx]->set_period(260);
             // Film rate
-            // _devices[idx]->set_step(157, 158);
+            // _devices[idx]->set_period_and_duty_cycle(157, 158);
         }
-        _devices[STROBE_INDEX]->set_step(259, 1);
+        _devices[STROBE_INDEX]->set_period_and_duty_cycle(260, 1);
         // Film rate
-        //_devices[STROBE_INDEX]->set_step(306, 9);
+        //_devices[STROBE_INDEX]->set_period_and_duty_cycle(306, 9);
     }
 
-    void voicecoil_set_step(unsigned int _on, unsigned int _off)
+    void voicecoil_set_period_and_duty_cycle(quanta_t period, quanta_t duty_cycle)
     {
         for(unsigned char idx = 0; idx < VOICECOIL_COUNT; ++idx) 
         {
-            _devices[idx]->set_step_on(_on);
-            _devices[idx]->set_step_off(_off);
+            _devices[idx]->set_period(period);
+            _devices[idx]->set_duty_cycle(duty_cycle);
         }
     }
 
-    void strobe_set_step(unsigned int _on, unsigned int _off)
+    void strobe_set_period_and_duty_cycle(quanta_t period, quanta_t duty_cycle)
     {
-        _devices[STROBE_INDEX]->set_step_on(_on);
-        _devices[STROBE_INDEX]->set_step_off(_off);
+        _devices[STROBE_INDEX]->set_period(period);
+        _devices[STROBE_INDEX]->set_duty_cycle(duty_cycle);
     }
 
     void inline step()
@@ -361,7 +332,6 @@ public:
     }
 
 private:
-    //Pin _devices[DEVICE_COUNT];
     Pin *_devices[DEVICE_COUNT];
 };
 
@@ -579,11 +549,6 @@ void Prompt(void)
             Serial.println("");
             Serial.println("all pins enabled");
             break;
-        case 'o':
-            onoff = !onoff;
-            Serial.println("");
-            Serial.println("on/off toggled");
-            break;
         case 'N':
             pins[channel].set_offset(1);
             delay(v);
@@ -597,40 +562,31 @@ void Prompt(void)
             Serial.println("back bump");
             break;
         case 's':
-            if (onoff)
-            {
-                pins[channel].set_step_on(v);
-            } else
-            {
-                pins[channel].set_step_off(v);
-            }
-            Serial.println("");
-            Serial.println("pin on/off set");
+            pins[channel].set_period(v);
+            Serial.println("period set");
+            v = 0;
+            break;
+        case 'S':
+            pins[channel].set_duty_cycle(v);
+            Serial.println("duty cycle set");
             v = 0;
             break;
         case 'V':
-            pins[channel].set_step_on(pins[channel].get_step_on() - 1);
+            pins[channel].set_period(pins[channel].get_period() - 1);
             Serial.println("");
-            Serial.println("pin frequency decreased");
+            Serial.println("period decreased");
             break;
         case 'v':
-            pins[channel].set_step_on(pins[channel].get_step_on() + 1);
+            pins[channel].set_period(pins[channel].get_period() + 1);
             Serial.println("");
-            Serial.println("pin frequency increased");
+            Serial.println("period increased");
             break;
         case 'y':
             unsigned int total_step;
-            total_step = (CPU_FREQ / OCR2A / 32.0 / (double)(v));
+            total_step = (CPU_FREQ / OCR2A / 32.0 / (float)(v));
             for(uint8_t dev_idx = 0; dev_idx < DEVICE_COUNT; ++dev_idx)
             {
-                if (dev_idx == STROBE_INDEX)
-                {
-                    pins[dev_idx].set_step_on(total_step - pins[dev_idx].get_step_off());
-                } else
-                {
-                    pins[dev_idx].set_step_on(total_step / 2);
-                    pins[dev_idx].set_step_off(total_step - pins[dev_idx].get_step_on());
-                }
+                pins[dev_idx].set_period(total_step);
                 pins.reset(false);
             }
             Serial.println("");
@@ -649,16 +605,15 @@ void Prompt(void)
 
         /* brightness */
         case 'b':
-            pins[STROBE_INDEX].set_step_off(v);
+            pins[STROBE_INDEX].set_duty_cycle(v);
             Serial.println("");
             Serial.println("strobe brightness set");
             v = 0;
             break;
         case '.':
-            if (pins[STROBE_INDEX].get_step_off() < MAX_BRIGHTNESS)
+            if (pins[STROBE_INDEX].get_duty_cycle() < MAX_BRIGHTNESS)
             {
-                pins[STROBE_INDEX].set_step_off(pins[STROBE_INDEX].get_step_off() + 1);
-                pins[STROBE_INDEX].set_step_on(pins[STROBE_INDEX].get_step_on() - 1);
+                pins[STROBE_INDEX].set_duty_cycle(pins[STROBE_INDEX].get_duty_cycle() + 1);
                 Serial.println("");
                 Serial.println("strobe brightness increased");
             } else
@@ -668,10 +623,9 @@ void Prompt(void)
             }
             break;
         case ',':
-            if (pins[STROBE_INDEX].get_step_off() > 0)
+            if (pins[STROBE_INDEX].get_duty_cycle() > 0)
             {
-                pins[STROBE_INDEX].set_step_off(pins[STROBE_INDEX].get_step_off() - 1);
-                pins[STROBE_INDEX].set_step_on(pins[STROBE_INDEX].get_step_on() + 1);
+                pins[STROBE_INDEX].set_duty_cycle(pins[STROBE_INDEX].get_duty_cycle() - 1);
                 Serial.println("");
                 Serial.println("strobe brightness decreased");
             } else
@@ -785,51 +739,6 @@ void Prompt(void)
 /******************************************************************************
  ** Main loop
  ******************************************************************************/
-
-void _loop(void)
-{
-    if (!Serial.available()) return;
-
-    static long v = 0;
-
-    char ch = Serial.read();
-    Serial.println(ch);
-
-    switch(ch) {
-        /* numbers / values */
-        case '0'...'9':
-            v = v * 10 + ch - '0';
-            break;
-        case '-':
-            v *= -1;
-            break;
-        case 'z':
-            v = 0;
-            break;
-        case 'm':
-            md.setM1Speed(v);
-            v = 0;
-            Serial.println("M1 Speed Set.");
-            break;
-        case 'M':
-            md.setM2Speed(v);
-            v = 0;
-            Serial.println("M2 Speed Set.");
-            break;
-        case 'b':
-            md.setM1Brake(v);
-            v = 0;
-            Serial.println("M1 Brake Set.");
-            break;
-        case 'B':
-            md.setM2Brake(v);
-            v = 0;
-            Serial.println("M2 Brake Set.");
-            break;
-    }
-    Serial.print("Value: ");
-    Serial.println(v);
-}
 
 void loop()
 {
