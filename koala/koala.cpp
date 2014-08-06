@@ -110,7 +110,7 @@ public:
     }
 #endif // PROMPT_ENABLE
 
-    void inline step()
+    void inline virtual step()
     {
         if (!_enable) return;
         _counter++;
@@ -129,8 +129,8 @@ public:
     }
 
     /* setters */
-    void set_step_on(unsigned int step) { _step_on = step; }
-    void set_step_off(unsigned int step) { _step_off = min(_max_off, step); }
+    void virtual set_step_on(unsigned int step) { _step_on = step; }
+    void virtual set_step_off(unsigned int step) { _step_off = min(_max_off, step); }
     void set_offset(int offset) { _step_offset = offset; }
     void reset_offset() { _step_offset = 0; }
     void set_step(unsigned int step_on, unsigned int step_off) 
@@ -162,41 +162,85 @@ public:
                 unsigned char step_on = 0, unsigned char step_off = 0, 
                 bool enable = false, unsigned int max_off=-1)
     {
+        _phase = 0;
         _counter = 0;
         _pin = pin;
         _enable = enable;
         _max_off = max_off;
         _interval = false;
-        set_step_on(step_on);
-        set_step_off(step_off);
+        _step_on = step_on;
+        _step_off = step_off;
         off();
     }
 
-    void inline on() 
+    void calculate_sin_table()
     {
-        if (_pin == 0)
+        _quarter_steps = (_step_on + _step_off) / 4;
+        if (!_quarter_steps)
         {
-            md.setM1Speed(motor_power);
-        } else
-        if (_pin == 1)
+            return;
+        }
+        double rad_step = (M_PI / 2.0) / (_quarter_steps);
+
+        for (uint16_t step = 0; step < _quarter_steps; ++step)
         {
-            md.setM2Speed(motor_power);
+            int16_t val = sin(step * rad_step) * motor_power;
+            _sin_table[step] = val;
         }
     }
 
-    void inline off()
+    void virtual set_step_on(unsigned int step)
+    { 
+        _step_on = step; 
+        calculate_sin_table();
+    }
+
+    void virtual set_step_off(unsigned int step) 
+    { 
+        _step_off = min(_max_off, step); 
+        calculate_sin_table();
+    }
+
+    void inline virtual step()
     {
+        if (!_enable) return;
+        _counter += 1;
+        if (_counter >= _quarter_steps)
+        {
+            _counter = 0;
+            _phase = (_phase + 1) % 4;
+        }
+        uint16_t power = 0;
+        switch (_phase)
+        {
+            case 0:
+                power = _sin_table[_counter];
+                break;
+            case 1:
+                power = (_sin_table[_quarter_steps - _counter]);
+                break;
+            case 2:
+                power = -(_sin_table[_counter]);
+                break;
+            case 3:
+                power = -(_sin_table[_quarter_steps - _counter]);
+                break;
+        }
         if (_pin == 0)
         {
-            md.setM1Speed(-motor_power);
+            md.setM1Speed(power);
         } else
         if (_pin == 1)
         {
-            md.setM2Speed(-motor_power);
+            md.setM2Speed(power);
         }
     }
+
 private:
     bool _interval;
+    uint16_t _quarter_steps;
+    int16_t _sin_table[100];
+    uint8_t _phase;
 };
 
 /******************************************************************************
@@ -280,7 +324,7 @@ public:
         {
             _devices[idx]->set_step(130, 130);
             // Film rate
-            //_devices[idx]->set_step(157, 158);
+            // _devices[idx]->set_step(157, 158);
         }
         _devices[STROBE_INDEX]->set_step(259, 1);
         // Film rate

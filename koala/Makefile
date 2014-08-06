@@ -6,7 +6,7 @@
 # options for possible values)
 MCU=atmega328p
 F_CPU=16000000
-ARDUINO_PORT=/dev/tty.usbmodemfd441
+ARDUINO_PORT=/dev/tty.usbmodem3d211
 
 # id to use with programmer
 # default: PROGRAMMER_MCU=$(MCU)
@@ -76,7 +76,7 @@ AVRDUDE_PROGRAMMERID=avrispv2
 # port--serial or parallel port to which your 
 # hardware programmer is attached
 #
-AVRDUDE_PORT=/dev/ttyACM0
+AVRDUDE_PORT=/dev/tty.usbmodem3d211
 
 
 ####################################################
@@ -121,7 +121,7 @@ ASMFLAGS =-I. $(INC) -mmcu=$(MCU)        \
 
 # linker
 LDFLAGS=-Wl,-Map,$(TRG).map -mmcu=$(MCU) \
-	-lm $(LIBS)
+	$(LIBS)
 
 ##### executables ####
 CC=avr-gcc
@@ -206,7 +206,7 @@ $(DUMPTRG): $(TRG)
 
 
 $(TRG): $(OBJDEPS) 
-	$(CC) $(LDFLAGS) -o $(TRG) $(OBJDEPS)
+	$(CC) $(LDFLAGS) -o $(TRG) $(OBJDEPS) -lm
 
 
 #### Generating assembly ####
