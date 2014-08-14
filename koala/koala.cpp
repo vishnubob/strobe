@@ -4,444 +4,65 @@
 #include "arduino/Arduino.h"
 #include "arduino/EEPROM.h"
 #include "DualVNH5019MotorShield.h"
+#include "TimerOne.h"
+#include "FlexiTimer2.h"
 
-DualVNH5019MotorShield md;
 
-#define STROBE_PIN              3 
-#define VOICECOIL1_PIN          0
-#define VOICECOIL2_PIN          1
-#define VOICECOIL_COUNT         2
-#define STROBE_INDEX            2
-#define DEVICE_COUNT            3
+#define STROBE_PIN              9 
+#define PUMP_PIN                0 
 #define PROMPT_ENABLE           1
 #define MAX_BRIGHTNESS          15
 #define CPU_FREQ                16000000
+#define DEFAULT_FREQUENCY       80
+#define MAX_PUMP_STEPS          100
 
 // Helper macros for frobbing bits
 #define bitset(var,bitno) ((var) |= (1 << (bitno)))
 #define bitclr(var,bitno) ((var) &= ~(1 << (bitno)))
 #define bittst(var,bitno) (var& (1 << (bitno)))
 
-const int _device_map[] = {VOICECOIL1_PIN, VOICECOIL2_PIN, STROBE_PIN};
 uint16_t motor_power = 400;
 
 typedef uint16_t quanta_t;
 
-/******************************************************************************
- ** Pin
- ******************************************************************************/
+TimerOne timer_1;
+FlexiTimer2 timer_2;
+DualVNH5019MotorShield hbridge;
 
-class Pin
+class Pump
 {
 public:
-    void virtual init(unsigned char pin, 
-                quanta_t period = 0, quanta_t duty_cycle = 0, 
-                bool enable = false)
+    void init_pump(uint16_t steps)
     {
-        _counter = 0;
-        _offset = 0;
-        _state = false;
-        _pin = pin;
-        _enable = enable;
-        pinMode(_pin, OUTPUT);
-        off();
-        set_period(period);
-        set_duty_cycle(duty_cycle);
-    }
-
-    void inline virtual off() 
-    {
-        digitalWrite(_pin, LOW);
-    }
-
-    void inline virtual on()
-    {
-        digitalWrite(_pin, HIGH);
-    }
-
-    void disable() 
-    { 
-        _enable = false; 
-        off(); 
-    }
-
-    void enable() 
-    { 
-        _enable = true; 
-    }
-
-    void sync()
-    {
-        off();
-    }
-
-#if PROMPT_ENABLE
-    void print()
-    {
-        char hz_value_str[12];
-        float hz_value;
-        char duty_cycle_str[12];
-        float duty_cycle_value;
-        
-        // build the Hz string
-        hz_value = (CPU_FREQ / OCR2A / 32.0 / (float)(_period));
-        dtostrf(hz_value, 6, 4, hz_value_str);
-        // build duty cycle string
-        duty_cycle_value = (float)(_duty_cycle) / (float)(_period) * 100.0;
-        dtostrf(duty_cycle_value, 6, 1, duty_cycle_str);
-
-        Serial.print("Pin:  period: ");
-        Serial.print(_period);
-        Serial.print(" (");
-        Serial.print(hz_value_str);
-        Serial.print(" Hz) duty cycle: ");
-        Serial.print(duty_cycle_str);
-        Serial.print("% ");
-        Serial.print(" offset: ");
-        Serial.print(_offset, DEC);
-        Serial.print(" en: ");
-        Serial.println(_enable, DEC);
-
-    }
-#endif // PROMPT_ENABLE
-
-    void inline virtual step()
-    {
-        if (!_enable) return;
-
-        _counter += 1;
-        if (_counter > _period)
-            _counter = 0;
-
-        if (_counter < _duty_cycle && !_state)
-        {
-            on();
-            _state = true;
-        } else if (_counter >= _duty_cycle && _state)
-        {
-            off();
-            _state = false;
-        }
-    }
-
-    /* setters */
-    void virtual set_period(quanta_t period)
-    { 
-        _period = period;
-        set_duty_cycle(_duty_cycle);
-    }
-    void virtual set_duty_cycle(quanta_t duty_cycle) { _duty_cycle = min(duty_cycle, _period); }
-    void set_offset(quanta_t offset) { _offset = offset; }
-    void zero_offset() { _offset = 0; }
-    void set_period_and_duty_cycle(unsigned int period, unsigned int duty_cycle) 
-    { 
-        set_period(period);
-        set_duty_cycle(duty_cycle);
-    }
-    
-    /* getters */
-    quanta_t get_offset() const { return _offset; }
-    unsigned int get_period() const { return _period; }
-    unsigned int get_duty_cycle() const { return _duty_cycle; }
-    
-protected:
-    quanta_t _counter;
-    quanta_t _period;
-    quanta_t _duty_cycle;
-    quanta_t _offset;
-    unsigned char _pin;
-    bool _enable;
-    bool _state;
-};
-
-class VoiceCoilPin : public Pin
-{
-public:
-    void calculate_sin_table()
-    {
-        _quarter_step = ceil((float)_period / 4.0);
-        if (!_quarter_step)
-        {
-            return;
-        }
-        float rad_step = (M_PI / 2.0) / (_quarter_step);
-
-        for (uint16_t step = 0; step < _quarter_step; ++step)
+        _steps = min(MAX_PUMP_STEPS, steps);
+        float rad_step = (2 * math.pi) / _steps;
+        for (uint16_t step = 0; step < _steps; ++step)
         {
             int16_t val = sin(step * rad_step) * motor_power;
             _sin_table[step] = val;
         }
-    }
+        _counter = 0;
 
-    void virtual set_period(unsigned int step)
-    { 
-        _period = step; 
-        calculate_sin_table();
-    }
-
-    int16_t inline get_power(quanta_t counter)
-    {
-        if (counter < _quarter_step)
-            return _sin_table[counter];
-        counter -= _quarter_step;
-        if (counter < _quarter_step)
-            return (_sin_table[_quarter_step - counter - 1]);
-        counter -= _quarter_step;
-        if (counter < _quarter_step)
-            return -(_sin_table[counter]);
-        counter -= _quarter_step;
-        return -(_sin_table[_quarter_step - counter - 1]);
+        // initialize the hbridge
+        hbridge.init();
     }
 
     void inline virtual step()
     {
-        if (!_enable) return;
-
         _counter += 1;
-        if (_counter > _period)
+        if (_counter > _steps)
             _counter = 0;
 
-        uint16_t power = get_power(_counter);
-        if (_pin == VOICECOIL1_PIN)
-        {
-            md.setM1Speed(power);
-        } else
-        if (_pin == VOICECOIL2_PIN)
-        {
-            md.setM2Speed(power);
-        }
+        uint16_t power = _sin_table[_counter];
+        hbridge.setM1Speed(power);
     }
 
 private:
-    quanta_t counter;
-    uint8_t _quarter_step;
-    int16_t _sin_table[100];
+    uint16_t counter;
+    int16_t _sin_table[MAX_PUMP_STEPS];
 };
 
-/******************************************************************************
- ** PinSet
- ******************************************************************************/
-
-class PinSet
-{
-public:
-    void init()
-    {
-        for(unsigned char idx = 0; idx < DEVICE_COUNT; ++idx) 
-        {
-            if (idx == STROBE_INDEX)
-            {
-                _devices[idx] = new Pin;
-            } else
-            {
-                _devices[idx] = new VoiceCoilPin;
-            }
-            _devices[idx]->init(_device_map[idx]);
-        }
-    }
-
-    void voicecoils_enable()
-    {
-        for(unsigned char idx = 0; idx < VOICECOIL_COUNT; ++idx) 
-            _devices[idx]->enable();
-    }
-
-    void voicecoils_disable()
-    {
-        for(unsigned char idx = 0; idx < VOICECOIL_COUNT; ++idx) 
-            _devices[idx]->disable();
-    }
-
-    void strobe_enable()
-    {
-        _devices[STROBE_INDEX]->enable();
-    }
-
-    void strobe_disable()
-    {
-        _devices[STROBE_INDEX]->disable();
-    }
-
-    void enable()
-    {
-        voicecoils_enable();
-        strobe_enable();
-    }
-
-    void disable()
-    {
-        voicecoils_disable();
-        strobe_disable();
-    }
-
-    void reset(bool set_default_timing=true)
-    {
-        bitclr(TIMSK2, OCIE2A);
-        for(unsigned char idx = 0; idx < DEVICE_COUNT; ++idx) 
-        {
-            _devices[idx]->zero_offset();
-            _devices[idx]->sync();
-        }
-        if (set_default_timing)
-        {
-            set_default_timings();
-        }
-        bitset(TIMSK2, OCIE2A);
-    }
-
-    void set_default_timings()
-    {
-        for(unsigned char idx = 0; idx < VOICECOIL_COUNT; ++idx) 
-        {
-            _devices[idx]->set_period(260);
-            // Film rate
-            // _devices[idx]->set_period_and_duty_cycle(157, 158);
-        }
-        _devices[STROBE_INDEX]->set_period_and_duty_cycle(260, 1);
-        // Film rate
-        //_devices[STROBE_INDEX]->set_period_and_duty_cycle(306, 9);
-    }
-
-    void voicecoil_set_period_and_duty_cycle(quanta_t period, quanta_t duty_cycle)
-    {
-        for(unsigned char idx = 0; idx < VOICECOIL_COUNT; ++idx) 
-        {
-            _devices[idx]->set_period(period);
-            _devices[idx]->set_duty_cycle(duty_cycle);
-        }
-    }
-
-    void strobe_set_period_and_duty_cycle(quanta_t period, quanta_t duty_cycle)
-    {
-        _devices[STROBE_INDEX]->set_period(period);
-        _devices[STROBE_INDEX]->set_duty_cycle(duty_cycle);
-    }
-
-    void inline step()
-    {
-        for(unsigned char idx = 0; idx < DEVICE_COUNT; ++idx)
-        {
-            _devices[idx]->step();
-        }
-    }
-
-    Pin &operator[] (int idx)
-    {
-        idx = min(STROBE_INDEX, max(0, idx));
-        return *(_devices[idx]);
-    }
-
-private:
-    Pin *_devices[DEVICE_COUNT];
-};
-
-/******************************************************************************
- ** Ramp
- ******************************************************************************/
-
-class Ramp
-{
-public:
-    void init(int pt1, int pt2, unsigned long ttl, unsigned long delay=0, bool loop_flag=false, bool flip_flag=false)
-    {
-        _enable = false;
-        _delay = 0;
-        _loop_flag = loop_flag;
-        _flip_flag = flip_flag;
-        set_ramp(pt1, pt2, ttl);
-    }
-
-    void set_ramp(int pt1, int pt2, unsigned long ttl)
-    {
-        _value = 0;
-        _pt1 = pt1;
-        _pt2 = pt2;
-        _ttl = ttl;
-        set_clock();
-    }
-
-    void set_clock()
-    {
-        _timestamp = millis() + _delay;
-        _slope = static_cast<float>(_pt2 - _pt1) / static_cast<float>(_ttl);
-    }
-
-    int step()
-    {
-        if (millis() < _timestamp)
-        {
-            return _value;
-        }
-        if (_enable) {
-            if (timeout()) {
-                _value = _pt2;
-                _enable = _loop_flag;
-                if (_flip_flag) {
-                    flip();
-                } else
-                {
-                    reset();
-                }
-            } else {
-                _value = (millis() - _timestamp) * _slope + _pt1;
-            }
-        }
-        return _value;
-    }
-
-    void print()
-    {
-        Serial.print("Ramp: [");
-        Serial.print(_pt1, DEC);
-        Serial.print("-");
-        Serial.print(_pt2, DEC);
-        Serial.print("]: ");
-        Serial.print(_value, DEC);
-        Serial.print(" delay: ");
-        Serial.print(_delay, DEC);
-        Serial.print(" ttl: ");
-        Serial.print(_ttl, DEC);
-        Serial.print(" flip: ");
-        Serial.print(_flip_flag, DEC);
-        Serial.print(" loop: ");
-        Serial.print(_loop_flag, DEC);
-        Serial.print(" en: ");
-        Serial.println(_enable, DEC);
-    }
-
-    void flip() { set_ramp(_pt2, _pt1, _ttl); }
-    void reset() { set_ramp(_pt1, _pt2, _ttl); }
-    void enable() { _enable = true; reset(); }
-    void disable()  { _enable = false; }
-    bool is_enabled()  { return _enable; }
-    void set_delay(unsigned long delay) { _delay = delay; }
-    void set_flip(bool flag) { _flip_flag = flag; }
-    void set_loop(bool flag) { _loop_flag = flag; }
-    void set_pt1(int pt1) { _pt1 = pt1; reset(); }
-    void set_pt2(int pt2) { _pt2 = pt2; reset(); }
-    void set_ttl(unsigned long ttl) { _ttl = ttl; reset(); }
-    bool timeout() { return ((millis() - _timestamp) >= _ttl); }
-    int get_value() { return _value; }
-
-private:
-    int _pt1;
-    int _pt2;
-    int _value;
-    unsigned long _ttl;
-    unsigned long _delay;
-    unsigned long _timestamp;
-    float _slope;
-    bool _enable;
-    bool _flip_flag;
-    bool _loop_flag;
-};
-
-/******************************************************************************
- ** Globals
- ******************************************************************************/
-
-PinSet          pins;
-Ramp            ramps[DEVICE_COUNT];
+Pump pump;
 
 /******************************************************************************
  ** Setup
@@ -450,38 +71,23 @@ Ramp            ramps[DEVICE_COUNT];
 void setup()
 {
     // disable global interrupts
-    cli();
-    
     Serial.begin(57600);
     Serial.println("");
     Serial.print("[");
     
-    // setup timer2 - 8bits 
-    TCCR2A = 0;
-    TCCR2B = 0;
-    // 1:8
-    bitset(TCCR2B, CS21);
-    bitset(TCCR2B, CS20);
+    // configure timer 1
+    timer_1.initialize(1 / DEFAULT_FREQUENCY * 1E6)
+    timer_1.setPwmDuty(STROBE_PIN, 10);
 
-    // select CTC mode
-    bitset(TCCR2A, WGM21);
-    // start the exposure loop
-    OCR2A = 32;
-    // enable compare interrupt
-    bitset(TIMSK2, OCIE2A);
-    Serial.print("timer... ");
+    // configure timer 2
+    timer_2.set(1, 1 / DEFAULT_FREQUENCY / MAX_PUMP_STEPS, timer2_callback)
+    Serial.print("timers... ");
 
-    // init hbridge
-    Serial.print("hbridge... ");
-    md.init();
+    // pump hbridge
+    pump.init(MAX_PUMP_STEPS);
+    Serial.print("pump... ");
     
-    Serial.print("pins... ");
-    pins.init();
-    pins.reset();
-    pins.enable();
-
     // enable global interrupts
-    sei();
     Serial.print("] ");
 
     // init
@@ -635,91 +241,9 @@ void Prompt(void)
             }
             break;
 
-        /* ramp operations */
-        case 'd':
-            ramps[channel].set_delay(v);
-            v = 0;
-            Serial.println("");
-            Serial.println("ramp delay set");
-            break;
-        case 'R':
-            ramps[channel].set_pt1(v);
-            Serial.println("");
-            Serial.println("ramp pt1 set");
-            v = 0;
-            break;
-        case 'r':
-            ramps[channel].set_pt2(v);
-            Serial.println("");
-            Serial.println("ramp pt2 set");
-            v = 0;
-            break;
-        case 't':
-            ramps[channel].set_ttl(v);
-            Serial.println("");
-            Serial.println("ramp ttl set");
-            v = 0;
-            break;
-        case 'F':
-            ramps[channel].set_flip(true);
-            Serial.println("");
-            Serial.println("ramp flip on");
-            break;
-        case 'f':
-            ramps[channel].set_flip(false);
-            Serial.println("");
-            Serial.println("ramp flip off");
-            break;
-        case 'L':
-            ramps[channel].set_loop(true);
-            Serial.println("");
-            Serial.println("ramp loop on");
-            break;
-        case 'l':
-            ramps[channel].set_loop(false);
-            Serial.println("");
-            Serial.println("ramp loop off");
-            break;
-        case 'E':
-            ramps[channel].enable();
-            Serial.println("");
-            Serial.println("ramp enabled");
-            break;
-        case 'e':
-            ramps[channel].disable();
-            Serial.println("");
-            Serial.println("ramp disabled");
-            break;
-        case 'G':
-            for (uint8_t idx = 0; idx < DEVICE_COUNT; ++idx)
-            {
-                ramps[idx].enable();
-            }
-            Serial.println("");
-            Serial.println("all ramps enabled");
-            break;
-        case 'g':
-            for (uint8_t idx = 0; idx < DEVICE_COUNT; ++idx)
-            {
-                ramps[idx].disable();
-            }
-            Serial.println("");
-            Serial.println("all ramps disabled");
-            break;
-
         /* debugging output */
         case 'p':
             Serial.println("");
-            for (uint8_t idx = 0; idx < DEVICE_COUNT; ++idx)
-            {
-                Serial.print(idx, DEC);
-                Serial.print(": ");
-                pins[idx].print();
-                Serial.print(idx, DEC);
-                Serial.print(": ");
-                ramps[idx].print();
-            }
-            break;
         default:
             Serial.print("Unknown command: ");
             Serial.println(ch, DEC);
@@ -744,13 +268,6 @@ void loop()
 {
     for(;;)
     {
-        for (uint8_t ch = 0; ch < DEVICE_COUNT; ++ch)
-        {
-            if (ramps[ch].is_enabled())
-            {
-                pins[ch].set_offset(ramps[ch].step());
-            }
-        }
         wdt_reset();
 #if PROMPT_ENABLE
         Prompt();
@@ -758,7 +275,7 @@ void loop()
     }
 }
 
-ISR(TIMER2_COMPA_vect) 
+void timer2_callback
 {
-    pins.step();
+    pump.step();
 }

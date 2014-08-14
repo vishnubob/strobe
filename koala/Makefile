@@ -44,6 +44,8 @@ arduino/wiring_pulse.c \
 arduino/wiring_shift.c \
 arduino/EEPROM.c \
 DualVNH5019MotorShield.cpp \
+TimerOne.cpp \
+FlexiTimer2.cpp \
 koala.cpp
 
 # additional includes (e.g. -I/path/to/mydir)
