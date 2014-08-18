@@ -1,0 +1,15 @@
+Timer 0
+
+OCR0A 0x250
+OCR0B 0x125
+TCCR0A 0x100010 (com0b1, wgm01)
+TCCR0B 0x10 (cs01)
+
+Timer 1
+
+OCR1A 0x25000
+OCR1B 0x0
+TCCR1A 0x110000 (com1b1, com1b0)
+TCCR1B 0x1010 (wgm12, cs11)
+pwm period 25000
+
