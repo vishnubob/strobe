@@ -50,16 +50,16 @@ void DualVNH5019MotorShield::init()
   // prescaler: clockI/O / 1
   // outputs enabled
   // phase-correct PWM
-  // top of 400
+  // top of 50
   //
   // PWM frequency calculation
-  // 16MHz / 1 (prescaler) / 2 (phase-correct) / 400 (top) = 20kHz
-  TCCR1A = 0b10100000;
-  TCCR1B = 0b00010001;
-  ICR1 = 400;
+  // 16MHz / 8 (prescaler) / 2 (phase-correct) / 100 (top) = 20kHz
+  TCCR2A = 0b00110001;
+  TCCR2B = 0b00001010;
+  OCR2A = 50;
   #endif
 }
-// Set speed for motor 1, speed is a number betwenn -400 and 400
+// Set speed for motor 1, speed is a number betwenn -50 and 50
 void DualVNH5019MotorShield::setM1Speed(int speed)
 {
   unsigned char reverse = 0;
@@ -69,13 +69,9 @@ void DualVNH5019MotorShield::setM1Speed(int speed)
     speed = -speed;  // Make speed a positive quantity
     reverse = 1;  // Preserve the direction
   }
-  if (speed > 400)  // Max PWM dutycycle
-    speed = 400;
-  #if defined(__AVR_ATmega168__)|| defined(__AVR_ATmega328P__)
-  OCR1A = speed;
-  #else
-  analogWrite(_PWM1,speed * 51 / 80); // default to using analogWrite, mapping 400 to 255
-  #endif
+  if (speed > 50)  // Max PWM dutycycle
+    speed = 50;
+  OCR2B = 50 - speed;
   if (reverse)
   {
     digitalWrite(_INA1,LOW);
@@ -88,7 +84,7 @@ void DualVNH5019MotorShield::setM1Speed(int speed)
   }
 }
 
-// Set speed for motor 2, speed is a number betwenn -400 and 400
+// Set speed for motor 2, speed is a number betwenn -50 and 50
 void DualVNH5019MotorShield::setM2Speed(int speed)
 {
   unsigned char reverse = 0;
@@ -98,13 +94,9 @@ void DualVNH5019MotorShield::setM2Speed(int speed)
     speed = -speed;  // make speed a positive quantity
     reverse = 1;  // preserve the direction
   }
-  if (speed > 400)  // Max 
-    speed = 400;
-  #if defined(__AVR_ATmega168__)|| defined(__AVR_ATmega328P__)
-  OCR1B = speed;
-  #else
-  analogWrite(_PWM2,speed * 51 / 80); // default to using analogWrite, mapping 400 to 255
-  #endif 
+  if (speed > 50)  // Max 
+    speed = 50;
+  OCR2B = speed;
   if (reverse)
   {
     digitalWrite(_INA2,LOW);
@@ -124,7 +116,7 @@ void DualVNH5019MotorShield::setSpeeds(int m1Speed, int m2Speed)
   setM2Speed(m2Speed);
 }
 
-// Brake motor 1, brake is a number between 0 and 400
+// Brake motor 1, brake is a number between 0 and 50
 void DualVNH5019MotorShield::setM1Brake(int brake)
 {
   // normalize brake
@@ -132,18 +124,14 @@ void DualVNH5019MotorShield::setM1Brake(int brake)
   {
     brake = -brake;
   }
-  if (brake > 400)  // Max brake
-    brake = 400;
+  if (brake > 50)  // Max brake
+    brake = 50;
   digitalWrite(_INA1, LOW);
   digitalWrite(_INB1, LOW);
-  #if defined(__AVR_ATmega168__)|| defined(__AVR_ATmega328P__)
-  OCR1A = brake;
-  #else
-  analogWrite(_PWM1,brake * 51 / 80); // default to using analogWrite, mapping 400 to 255
-  #endif
+  OCR2B = brake;
 }
 
-// Brake motor 2, brake is a number between 0 and 400
+// Brake motor 2, brake is a number between 0 and 50
 void DualVNH5019MotorShield::setM2Brake(int brake)
 {
   // normalize brake
@@ -151,18 +139,14 @@ void DualVNH5019MotorShield::setM2Brake(int brake)
   {
     brake = -brake;
   }
-  if (brake > 400)  // Max brake
-    brake = 400;
+  if (brake > 50)  // Max brake
+    brake = 50;
   digitalWrite(_INA2, LOW);
   digitalWrite(_INB2, LOW);
-  #if defined(__AVR_ATmega168__)|| defined(__AVR_ATmega328P__)
-  OCR1B = brake;
-  #else
-  analogWrite(_PWM2,brake * 51 / 80); // default to using analogWrite, mapping 400 to 255
-  #endif
+  OCR2B = brake;
 }
 
-// Brake motor 1 and 2, brake is a number between 0 and 400
+// Brake motor 1 and 2, brake is a number between 0 and 50
 void DualVNH5019MotorShield::setBrakes(int m1Brake, int m2Brake)
 {
   setM1Brake(m1Brake);

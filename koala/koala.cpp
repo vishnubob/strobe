@@ -7,8 +7,7 @@
 #include "TimerOne.h"
 #include "FlexiTimer2.h"
 
-
-#define STROBE_PIN              9 
+#define STROBE_PIN              10 
 #define PUMP_PIN                0 
 #define PROMPT_ENABLE           1
 #define MAX_BRIGHTNESS          15
@@ -21,45 +20,53 @@
 #define bitclr(var,bitno) ((var) &= ~(1 << (bitno)))
 #define bittst(var,bitno) (var& (1 << (bitno)))
 
-uint16_t motor_power = 400;
+uint8_t motor_power = 50;
 
 typedef uint16_t quanta_t;
 
 TimerOne timer_1;
-FlexiTimer2 timer_2;
 DualVNH5019MotorShield hbridge;
+
+void timer2_callback(void);
 
 class Pump
 {
 public:
-    void init_pump(uint16_t steps)
+    void init(uint16_t steps)
     {
         _steps = min(MAX_PUMP_STEPS, steps);
-        float rad_step = (2 * math.pi) / _steps;
+        float rad_step = (2 * M_PI) / _steps;
         for (uint16_t step = 0; step < _steps; ++step)
         {
-            int16_t val = sin(step * rad_step) * motor_power;
-            _sin_table[step] = val;
+            _sin_table[step] = sin(step * rad_step) * motor_power;
         }
         _counter = 0;
 
         // initialize the hbridge
         hbridge.init();
+
+        // set CTC mode
+        TCCR0A = 0x2;
+        // prescale set to 8
+        TCCR0B = 0x2;
+        // set our period
+        OCR0A = timer_1.pwmPeriod / _steps;
+        OCR0B = 0;
+        // enable our interrupt
+        bitSet(TIMSK0, OCIE0A);
+        bitSet(TCCR0A, COM0B0);
     }
 
     void inline virtual step()
     {
-        _counter += 1;
-        if (_counter > _steps)
-            _counter = 0;
-
-        uint16_t power = _sin_table[_counter];
-        hbridge.setM1Speed(power);
+        hbridge.setM1Speed(_sin_table[_counter++]);
+        _counter %= _steps;
     }
 
 private:
-    uint16_t counter;
-    int16_t _sin_table[MAX_PUMP_STEPS];
+    volatile uint16_t _counter;
+    uint16_t _steps;
+    int8_t _sin_table[MAX_PUMP_STEPS];
 };
 
 Pump pump;
@@ -67,6 +74,27 @@ Pump pump;
 /******************************************************************************
  ** Setup
  ******************************************************************************/
+
+void set_exposure(uint16_t us_length, int16_t offset)
+{
+    //int16_t cycles = (1.0 / (F_CPU / 8.0 / 2.0)) * 1E6 * us_length;
+    int16_t cycles = (1.0 / (F_CPU / 8)) * 1E6 * us_length;
+    int16_t on_cycle = offset;
+    int16_t off_cycle = cycles + offset;
+    timer_1.set_compare(on_cycle, off_cycle);
+    /*
+    Serial.print("us_length: ");
+    Serial.print(us_length);
+    Serial.print(" cycles: ");
+    Serial.print(cycles);
+    Serial.print(" timer_1.pwmPeriod: ");
+    Serial.print(timer_1.pwmPeriod);
+    Serial.print(" on_cycle: ");
+    Serial.print(on_cycle);
+    Serial.print(" off_cycle: ");
+    Serial.println(off_cycle);
+    */
+}
 
 void setup()
 {
@@ -76,22 +104,35 @@ void setup()
     Serial.print("[");
     
     // configure timer 1
-    timer_1.initialize(1 / DEFAULT_FREQUENCY * 1E6)
-    timer_1.setPwmDuty(STROBE_PIN, 10);
-
-    // configure timer 2
-    timer_2.set(1, 1 / DEFAULT_FREQUENCY / MAX_PUMP_STEPS, timer2_callback)
+    // mode 12: CTC mode
+    pinMode(STROBE_PIN, OUTPUT);
+    digitalWrite(STROBE_PIN, 0);
+    pinMode(5, OUTPUT);
+    timer_1.initialize((1.0 / DEFAULT_FREQUENCY) * 1E6, 4);
+    timer_1.configure_pin(STROBE_PIN, 2);
+    set_exposure(1000, 0);
     Serial.print("timers... ");
-
+    
     // pump hbridge
     pump.init(MAX_PUMP_STEPS);
     Serial.print("pump... ");
-    
+
     // enable global interrupts
     Serial.print("] ");
 
+    timer_1.start();
+
     // init
     Serial.println("init done!");
+    Serial.println("");
+    Serial.print("pwm period ");
+    Serial.println(timer_1.pwmPeriod);
+    Serial.print("OCR0A 0x");
+    Serial.println(OCR0A, DEC);
+    Serial.print("TCCR1A 0x");
+    Serial.println(TCCR1A, BIN);
+    Serial.print("TCCR1B 0x");
+    Serial.println(TCCR1B, BIN);
 }
 
 
@@ -107,95 +148,82 @@ void Prompt(void)
     static long v = 0;
     static unsigned char channel = 0;
     static unsigned char onoff = 0;
+    static uint16_t exposure = 1000;
+    static uint16_t offset = 0;
 
     char ch = Serial.read();
     Serial.println(ch);
+    Serial.println("");
+    bool v_change = false;
+    long usecs;
 
     switch(ch) {
         /* numbers / values */
         case '0'...'9':
             v = v * 10 + ch - '0';
+            v_change = true;
             break;
         case '-':
             v *= -1;
+            v_change = true;
             break;
         case 'z':
             v = 0;
             break;
-        case 'c':
-            channel = v;
-            Serial.println("");
-            Serial.println("channel set");
-            v = 0;
-            break;
 
         /* pin operations */
+        case 'g':
+            while(1)
+            {
+                for (int x = 0; x < 24000; ++x)
+                {
+                    set_exposure(exposure, x);
+                    delayMicroseconds(500);
+                }
+                for (int x = 24000; x > 0; --x)
+                {
+                    set_exposure(exposure, x);
+                    delayMicroseconds(500);
+                }
+            }
+            Serial.println("gogo");
+            break;
         case 'x':
-            pins[channel].disable();
-            Serial.println("");
-            Serial.println("pin disabled");
+            exposure = v;
+            set_exposure(exposure, offset);
+            Serial.println("exposure set");
             break;
-        case 'X':
-            pins[channel].enable();
-            Serial.println("");
-            Serial.println("pin enabled");
+        case 'o':
+            offset = v;
+            set_exposure(exposure, offset);
+            Serial.println("offset set");
             break;
-        case 'u':
-            pins.reset();
-            Serial.println("");
-            Serial.println("all pins reset");
-            break;
-        case 'q':
-            pins.disable();
-            Serial.println("");
-            Serial.println("all pins disabled");
-            break;
-        case 'Q':
-            pins.enable();
-            Serial.println("");
-            Serial.println("all pins enabled");
+        case 'd':
+            timer_1.setPeriod(v);
+            Serial.println("setting period");
             break;
         case 'N':
-            pins[channel].set_offset(1);
-            delay(v);
-            pins[channel].set_offset(0);
             Serial.println("forward bump");
             break;
         case 'n':
-            pins[channel].set_offset(-1);
-            delay(v);
-            pins[channel].set_offset(0);
             Serial.println("back bump");
             break;
         case 's':
-            pins[channel].set_period(v);
             Serial.println("period set");
-            v = 0;
             break;
         case 'S':
-            pins[channel].set_duty_cycle(v);
             Serial.println("duty cycle set");
-            v = 0;
             break;
         case 'V':
-            pins[channel].set_period(pins[channel].get_period() - 1);
-            Serial.println("");
             Serial.println("period decreased");
             break;
         case 'v':
-            pins[channel].set_period(pins[channel].get_period() + 1);
-            Serial.println("");
             Serial.println("period increased");
             break;
         case 'y':
-            unsigned int total_step;
-            total_step = (CPU_FREQ / OCR2A / 32.0 / (float)(v));
-            for(uint8_t dev_idx = 0; dev_idx < DEVICE_COUNT; ++dev_idx)
-            {
-                pins[dev_idx].set_period(total_step);
-                pins.reset(false);
-            }
-            Serial.println("");
+            // calculate microseconds
+            usecs = 1 / v * 1E6;
+            // timer_1.set_period(usecs);
             Serial.print(v);
             Serial.println("Hz value set!");
             v = 0;
@@ -204,23 +232,19 @@ void Prompt(void)
         /* motor power */
         case 'm':
             motor_power = min(400, max(0, v));
-            Serial.println("");
             Serial.println("motor power set");
             v = 0;
             break;
 
         /* brightness */
         case 'b':
-            pins[STROBE_INDEX].set_duty_cycle(v);
-            Serial.println("");
             Serial.println("strobe brightness set");
             v = 0;
             break;
         case '.':
-            if (pins[STROBE_INDEX].get_duty_cycle() < MAX_BRIGHTNESS)
+            //if (pins[STROBE_INDEX].get_duty_cycle() < MAX_BRIGHTNESS)
+            if(0)
             {
-                pins[STROBE_INDEX].set_duty_cycle(pins[STROBE_INDEX].get_duty_cycle() + 1);
-                Serial.println("");
                 Serial.println("strobe brightness increased");
             } else
             {
@@ -229,9 +253,9 @@ void Prompt(void)
             }
             break;
         case ',':
-            if (pins[STROBE_INDEX].get_duty_cycle() > 0)
+            //if (pins[STROBE_INDEX].get_duty_cycle() > 0)
+            if(0)
             {
-                pins[STROBE_INDEX].set_duty_cycle(pins[STROBE_INDEX].get_duty_cycle() - 1);
                 Serial.println("");
                 Serial.println("strobe brightness decreased");
             } else
@@ -244,6 +268,13 @@ void Prompt(void)
         /* debugging output */
         case 'p':
             Serial.println("");
+            Serial.print("OCR1A 0x");
+            Serial.println(OCR1A, HEX);
+            Serial.print("OCR1B 0x");
+            Serial.println(OCR1B, HEX);
+            Serial.print("ICR1 0x");
+            Serial.println(ICR1, HEX);
+            break;
         default:
             Serial.print("Unknown command: ");
             Serial.println(ch, DEC);
@@ -257,6 +288,10 @@ void Prompt(void)
         Serial.print(onoff, DEC);
         Serial.println("");
         Serial.print("> ");
+
+        // this helps squash accidental value inputs
+        if (!v_change)
+            v = 0;
 }
 #endif // PROMPT_ENABLE
 
@@ -268,14 +303,14 @@ void loop()
 {
     for(;;)
     {
-        wdt_reset();
+        //wdt_reset();
 #if PROMPT_ENABLE
         Prompt();
 #endif // PROMPT_ENABLE
     }
 }
 
-void timer2_callback
+ISR(TIMER0_COMPA_vect)
 {
     pump.step();
 }

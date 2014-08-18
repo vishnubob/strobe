@@ -37,21 +37,60 @@
 #define TIMERONE_cpp
 
 #include "TimerOne.h"
+#include "Arduino.h"
 
 TimerOne Timer1;              // preinstatiate
+volatile uint16_t _ocr1a_on;
+volatile uint16_t _ocr1a_off;
+volatile uint16_t _ocr1a_on_paged;
+volatile uint16_t _ocr1a_off_paged;
 
-ISR(TIMER1_OVF_vect)          // interrupt service routine that wraps a user defined function supplied by attachInterrupt
+ISR(TIMER1_COMPB_vect)
 {
-  Timer1.isrCallback();
+    TCCR1A ^= (1 << COM0B0);
+    if (TCCR1A & (1 << COM0B0))
+    {
+        // set OCOB on compare match
+        OCR1B = _ocr1a_on;
+    } else
+    {
+        // clear OCOB on compare match
+        OCR1B = _ocr1a_off;
+        _ocr1a_off = _ocr1a_off_paged;
+        _ocr1a_on = _ocr1a_on_paged;
+    }
+}
+
+ISR(TIMER1_COMPA_vect)
+{
+}
+
+ISR(TIMER1_CAPT_vect)
+{
+}
+
+ISR(TIMER1_OVF_vect)
+{
+    TCNT0 = 0;
 }
 
 
-void TimerOne::initialize(long microseconds, bool phase_correct)
+void TimerOne::initialize(long microseconds, uint8_t mode)
 {
+    _on = false;
     TCCR1A = 0;
     TCCR1B = 0;
 
+    int8_t sawtooth_modes[] = {0, 4, 5, 6, 7, 12, 13, 14, 15, -1};
+    int8_t idx = 0;
     _mode = mode;
+    _sawtooth_mode = false;
+    //bitSet(TIMSK1, TOIE1);
+    //bitSet(TIMSK1, ICIE1);
+    //bitSet(TIMSK1, OCIE1A);
+
+    while (!_sawtooth_mode && (sawtooth_modes[idx] != -1))
+        _sawtooth_mode = (_mode == sawtooth_modes[idx++]);
     if (_mode & _BV(0))
         bitSet(TCCR1A, WGM10);
 
@@ -70,35 +109,33 @@ void TimerOne::initialize(long microseconds, bool phase_correct)
 
 void TimerOne::setPeriod(long microseconds)		// AR modified for atomic access
 {
-  
-  long cycles = (F_CPU / 2000000) * microseconds;                                // the counter runs backwards after TOP, interrupt is at BOTTOM so divide microseconds by 2
-  if(cycles < RESOLUTION)              clockSelectBits = _BV(CS10);              // no prescale, full xtal
-  else if((cycles >>= 3) < RESOLUTION) clockSelectBits = _BV(CS11);              // prescale by /8
-  else if((cycles >>= 3) < RESOLUTION) clockSelectBits = _BV(CS11) | _BV(CS10);  // prescale by /64
-  else if((cycles >>= 2) < RESOLUTION) clockSelectBits = _BV(CS12);              // prescale by /256
-  else if((cycles >>= 2) < RESOLUTION) clockSelectBits = _BV(CS12) | _BV(CS10);  // prescale by /1024
-  else        cycles = RESOLUTION - 1, clockSelectBits = _BV(CS12) | _BV(CS10);  // request was out of bounds, set as maximum
-  
-  oldSREG = SREG;				
-  cli();							// Disable interrupts for 16 bit register access
-  ICR1 = pwmPeriod = cycles;                                          // ICR1 is TOP in p & f correct pwm mode
-  SREG = oldSREG;
-  
-  TCCR1B &= ~(_BV(CS10) | _BV(CS11) | _BV(CS12));
-  TCCR1B |= clockSelectBits;                                          // reset clock select register, and starts the clock
+    long cycles = (F_CPU / 1E6) * microseconds;
+    if (!_sawtooth_mode)
+    {
+        cycles /= 2;
+    }
+
+    if(cycles < RESOLUTION)              clockSelectBits = _BV(CS10);              // no prescale, full xtal
+    else if((cycles >>= 3) < RESOLUTION) clockSelectBits = _BV(CS11);              // prescale by /8
+    else if((cycles >>= 3) < RESOLUTION) clockSelectBits = _BV(CS11) | _BV(CS10);  // prescale by /64
+    else if((cycles >>= 2) < RESOLUTION) clockSelectBits = _BV(CS12);              // prescale by /256
+    else if((cycles >>= 2) < RESOLUTION) clockSelectBits = _BV(CS12) | _BV(CS10);  // prescale by /1024
+    else        cycles = RESOLUTION - 1, clockSelectBits = _BV(CS12) | _BV(CS10);  // request was out of bounds, set as maximum
+
+    oldSREG = SREG;				
+    cli();							// Disable interrupts for 16 bit register access
+    //ICR1 = pwmPeriod = cycles;                                          // ICR1 is TOP in p & f correct pwm mode
+    OCR1A = pwmPeriod = cycles;                                          // ICR1 is TOP in p & f correct pwm mode
+    SREG = oldSREG;
+
+    TCCR1B &= ~(_BV(CS10) | _BV(CS11) | _BV(CS12));
+    TCCR1B |= clockSelectBits;                                          // reset clock select register, and starts the clock
 }
 
-void TimerOne::set_compare(uint16_t ocval, bool breg=false)
+void TimerOne::set_compare(uint16_t on, uint16_t off)
 {
-    oldSREG = SREG;
-    cli();
-    if (breg)
-    {
-        OCR1B = val2;
-    } else
-    {
-    OCR1A = val1;
-    SREG = oldSREG;
+    _ocr1a_on_paged = on;
+    _ocr1a_off_paged = off;
 }
 
 void TimerOne::setPwmDuty(char pin, int duty)
@@ -125,10 +162,8 @@ void TimerOne::configure_pin(uint8_t pin, uint8_t mode)
     else if (pin == 10) { pbit = PORTB2; cbit = COM1B0; }
     else return;
 
-    uint8_t mask = 0xFF ^ (3 << pbit);
-    mode = min(mode, 3) << pbit;
-
-    TCCR1A = (TCCR1A & mask) | mode;
+    uint8_t mask = 0xFF ^ (0x3 << cbit);
+    TCCR1A = (TCCR1A & mask) | ((mode & 0x3) << cbit);
     if (mode) DDRB |= _BV(pbit);
 }
 
@@ -157,7 +192,7 @@ void TimerOne::attachInterrupt(void (*isr)(), long microseconds)
 {
   if(microseconds > 0) setPeriod(microseconds);
   isrCallback = isr;                                       // register the user's callback with the real ISR
-  TIMSK1 = _BV(TOIE1);                                     // sets the timer overflow interrupt enable bit
+  TIMSK1 = _BV(OCIE1A);                                     // sets the timer overflow interrupt enable bit
 	// might be running with interrupts disabled (eg inside an ISR), so don't touch the global state
 //  sei();
   resume();												
@@ -171,7 +206,8 @@ void TimerOne::detachInterrupt()
 
 void TimerOne::resume()				// AR suggested
 { 
-  TCCR1B |= clockSelectBits;
+    TCCR1B |= clockSelectBits;
+    GTCCR = 0;
 }
 
 void TimerOne::restart()		// Depricated - Public interface to start at zero - Lex 10/9/2011
@@ -181,25 +217,41 @@ void TimerOne::restart()		// Depricated - Public interface to start at zero - Le
 
 void TimerOne::start()	// AR addition, renamed by Lex to reflect it's actual role
 {
-  unsigned int tcnt1;
-  
-  TIMSK1 &= ~_BV(TOIE1);        // AR added 
-  GTCCR |= _BV(PSRSYNC);   		// AR added - reset prescaler (NB: shared with all 16 bit timers);
+    uint8_t _TCCR0A = TCCR0A;
+    uint8_t _TCCR0B = TCCR0B;
+    uint8_t _TCCR1A = TCCR1A;
+    uint8_t _TCCR1B = TCCR1B;
+    uint8_t _OCR0B = OCR0B;
+    uint8_t _OCR1B = OCR1B;
 
-  oldSREG = SREG;				// AR - save status register
-  cli();						// AR - Disable interrupts
-  TCNT1 = 0;                	
-  SREG = oldSREG;          		// AR - Restore status register
-	resume();
-  do {	// Nothing -- wait until timer moved on from zero - otherwise get a phantom interrupt
-	oldSREG = SREG;
-	cli();
-	tcnt1 = TCNT1;
-	SREG = oldSREG;
-  } while (tcnt1==0); 
- 
-//  TIFR1 = 0xff;              		// AR - Clear interrupt flags
-//  TIMSK1 = _BV(TOIE1);              // sets the timer overflow interrupt enable bit
+    bitClear(TIMSK1, OCIE1B);
+    GTCCR = (1 << TSM) | (1 << PSRSYNC);
+    TCCR0A = 0x30; // set timer0 to normal mode
+    TCCR0B = 0x01; // CK = CPU/1
+    TCCR1A = 0x30; // same for timer1
+    TCCR1B = 0x01;
+    TCNT0 = 0;
+    TCNT1 = 0; // set counters to 0
+    OCR0B = 3; // as compare fails 1 ck cycle after TCNT change
+    OCR1B = 3; // set compare match to low value larger than 1
+    GTCCR = 0; // restart timers
+    asm volatile ("nop"); // delay for the length of your count
+    asm volatile ("nop");
+    asm volatile ("nop");
+    GTCCR = (1 << TSM) | (1 << PSRSYNC);
+
+    TCCR0A = _TCCR0A;
+    TCCR0B = _TCCR0B;
+    TCCR1A = _TCCR1A;
+    TCCR1B = _TCCR1B;
+    OCR0B = _OCR0B;
+    OCR1B = _OCR1B;
+
+    TCNT1 = 1;                	
+    TCNT0 = 1;
+    bitSet(TIMSK1, OCIE1B);
+
+    GTCCR = 0;
 }
 
 void TimerOne::stop()

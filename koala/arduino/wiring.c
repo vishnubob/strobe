@@ -41,6 +41,7 @@ volatile unsigned long timer0_overflow_count = 0;
 volatile unsigned long timer0_millis = 0;
 static unsigned char timer0_fract = 0;
 
+/*
 #if defined(__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
 SIGNAL(TIM0_OVF_vect)
 #else
@@ -63,6 +64,7 @@ SIGNAL(TIMER0_OVF_vect)
 	timer0_millis = m;
 	timer0_overflow_count++;
 }
+*/
 
 unsigned long millis()
 {
@@ -192,6 +194,7 @@ void init()
 	// work there
 	sei();
 	
+    /*
 	// on the ATmega168, timer 0 is also used for fast hardware pwm
 	// (using phase-correct PWM would mean that timer 0 overflowed half as often
 	// resulting in different millis() behavior on the ATmega8 and ATmega168)
@@ -279,20 +282,20 @@ void init()
 	sbi(TCCR3A, WGM30);		// put timer 3 in 8-bit phase correct pwm mode
 #endif
 
-#if defined(TCCR4A) && defined(TCCR4B) && defined(TCCR4D) /* beginning of timer4 block for 32U4 and similar */
+#if defined(TCCR4A) && defined(TCCR4B) && defined(TCCR4D)
 	sbi(TCCR4B, CS42);		// set timer4 prescale factor to 64
 	sbi(TCCR4B, CS41);
 	sbi(TCCR4B, CS40);
 	sbi(TCCR4D, WGM40);		// put timer 4 in phase- and frequency-correct PWM mode	
 	sbi(TCCR4A, PWM4A);		// enable PWM mode for comparator OCR4A
 	sbi(TCCR4C, PWM4D);		// enable PWM mode for comparator OCR4D
-#else /* beginning of timer4 block for ATMEGA1280 and ATMEGA2560 */
+#else 
 #if defined(TCCR4B) && defined(CS41) && defined(WGM40)
 	sbi(TCCR4B, CS41);		// set timer 4 prescale factor to 64
 	sbi(TCCR4B, CS40);
 	sbi(TCCR4A, WGM40);		// put timer 4 in 8-bit phase correct pwm mode
 #endif
-#endif /* end timer4 block for ATMEGA1280/2560 and similar */	
+#endif 
 
 #if defined(TCCR5B) && defined(CS51) && defined(WGM50)
 	sbi(TCCR5B, CS51);		// set timer 5 prescale factor to 64
@@ -312,6 +315,7 @@ void init()
 	// enable a2d conversions
 	sbi(ADCSRA, ADEN);
 #endif
+    */
 
 	// the bootloader connects pins 0 and 1 to the USART; disconnect them
 	// here so they can be used as normal digital i/o; they will be

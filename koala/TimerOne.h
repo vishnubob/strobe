@@ -41,6 +41,7 @@
 
 #define RESOLUTION 65536    // Timer1 is 16 bit
 
+
 class TimerOne
 {
   public:
@@ -50,6 +51,8 @@ class TimerOne
     unsigned char clockSelectBits;
 	char oldSREG;					// To hold Status Register while ints disabled
 	uint8_t _mode;
+	bool _sawtooth_mode;
+	bool _on;
 
     // methods
     void initialize(long microseconds=1000000, uint8_t mode=8);
@@ -64,8 +67,9 @@ class TimerOne
     void detachInterrupt();
     void setPeriod(long microseconds);
     void setPwmDuty(char pin, int duty);
+    void set_compare(uint16_t ocaval, uint16_t ocbval);
+    void configure_pin(uint8_t pin, uint8_t mode);
     void (*isrCallback)();
 };
 
-extern TimerOne Timer1;
 #endif

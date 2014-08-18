@@ -27,12 +27,12 @@ class DualVNH5019MotorShield
   private:
     unsigned char _INA1;
     unsigned char _INB1;
-    static const unsigned char _PWM1 = 9;
+    static const unsigned char _PWM1 = 3;
     unsigned char _EN1DIAG1;
     unsigned char _CS1;
     unsigned char _INA2;
     unsigned char _INB2;
-    static const unsigned char _PWM2 = 10;
+    static const unsigned char _PWM2 = 11;
     unsigned char _EN2DIAG2;
     unsigned char _CS2;
     
