@@ -125,7 +125,8 @@ void TimerOne::setPeriod(long microseconds)		// AR modified for atomic access
     oldSREG = SREG;				
     cli();							// Disable interrupts for 16 bit register access
     //ICR1 = pwmPeriod = cycles;                                          // ICR1 is TOP in p & f correct pwm mode
-    OCR1A = pwmPeriod = cycles;                                          // ICR1 is TOP in p & f correct pwm mode
+    pwmPeriod = cycles;                                          // ICR1 is TOP in p & f correct pwm mode
+    OCR1A = pwmPeriod - 1;                                          // ICR1 is TOP in p & f correct pwm mode
     SREG = oldSREG;
 
     TCCR1B &= ~(_BV(CS10) | _BV(CS11) | _BV(CS12));

@@ -50,17 +50,31 @@ public:
         // prescale set to 8
         TCCR0B = 0x2;
         // set our period
-        OCR0A = timer_1.pwmPeriod / _steps;
-        OCR0B = 0;
+        OCR0A = timer_1.pwmPeriod / _steps - 1;
+        OCR0B = OCR0A / 2;
         // enable our interrupt
-        bitSet(TIMSK0, OCIE0A);
+        bitSet(TIMSK0, OCIE0B);
         bitSet(TCCR0A, COM0B0);
+        bitSet(TCCR0A, COM0B1);
     }
 
     void inline virtual step()
     {
+        uint16_t ts = TCNT1;
+        static int cutoff = 200;
         hbridge.setM1Speed(_sin_table[_counter++]);
         _counter %= _steps;
+        if (_counter == 1)
+        {
+            if (cutoff)
+            {
+                //Serial.println(ts, DEC);
+                cutoff--;
+            }
+            bitSet(TCCR0A, COM0B0);
+        }
+        else
+            bitClear(TCCR0A, COM0B0);
     }
 
 private:
@@ -98,6 +112,8 @@ void set_exposure(uint16_t us_length, int16_t offset)
 
 void setup()
 {
+    GTCCR = (1 << TSM);
+    GTCCR = (1 << TSM) | (1 << PSRSYNC);
     // disable global interrupts
     Serial.begin(57600);
     Serial.println("");
@@ -123,18 +139,41 @@ void setup()
     timer_1.start();
 
     // init
-    Serial.println("init done!");
-    Serial.println("");
-    Serial.print("pwm period ");
-    Serial.println(timer_1.pwmPeriod);
+    //Serial.println("init done!");
+    /*
+    for(uint16_t x = 0; x < 29206; ++x)
+        asm volatile ("nop");
+    GTCCR = (1 << TSM) | (1 << PSRSYNC);
+    Serial.print("TCNT0 ");
+    Serial.println(TCNT0, DEC);
+    Serial.print("TCNT1 ");
+    Serial.println(TCNT1, DEC);
+    */
+}
+
+void print_timers()
+{
+    Serial.println("\nTimer 0\n");
     Serial.print("OCR0A 0x");
     Serial.println(OCR0A, DEC);
+    Serial.print("OCR0B 0x");
+    Serial.println(OCR0B, DEC);
+    Serial.print("TCCR0A 0x");
+    Serial.println(TCCR0A, BIN);
+    Serial.print("TCCR0B 0x");
+    Serial.println(TCCR0B, BIN);
+    Serial.println("\nTimer 1\n");
+    Serial.print("OCR1A 0x");
+    Serial.println(OCR1A, DEC);
+    Serial.print("OCR1B 0x");
+    Serial.println(OCR1B, DEC);
     Serial.print("TCCR1A 0x");
     Serial.println(TCCR1A, BIN);
     Serial.print("TCCR1B 0x");
     Serial.println(TCCR1B, BIN);
+    Serial.print("pwm period ");
+    Serial.println(timer_1.pwmPeriod);
 }
-
 
 /******************************************************************************
  ** Serial
@@ -267,13 +306,7 @@ void Prompt(void)
 
         /* debugging output */
         case 'p':
-            Serial.println("");
-            Serial.print("OCR1A 0x");
-            Serial.println(OCR1A, HEX);
-            Serial.print("OCR1B 0x");
-            Serial.println(OCR1B, HEX);
-            Serial.print("ICR1 0x");
-            Serial.println(ICR1, HEX);
+            print_timers();
             break;
         default:
             Serial.print("Unknown command: ");
@@ -310,7 +343,7 @@ void loop()
     }
 }
 
-ISR(TIMER0_COMPA_vect)
+ISR(TIMER0_COMPB_vect)
 {
     pump.step();
 }
